@@ -1,0 +1,1203 @@
+import mmcv
+import torch
+
+import numpy as np
+
+from .pipelines import Compose
+
+from mmdet.datasets import DATASETS
+
+from torch.utils.data import Dataset
+
+from pytorch3d.ops import box3d_overlap
+
+from pyquaternion import Quaternion as Q
+
+from ..core.bbox import LiDARInstance3DBoxes, get_box_type
+
+
+CAM_NAME = ['CAM_FRONT_LEFT', 'CAM_FRONT', 'CAM_FRONT_RIGHT', 'CAM_BACK_LEFT', 'CAM_BACK', 'CAM_BACK_RIGHT']
+
+OBJECT_CLASSES = {
+    7:  'traffic_light',
+    8:  'traffic_sign',
+    12: 'pedestrian',
+    13: 'rider',
+    14: 'car',
+    15: 'truck',
+    16: 'bus',
+    18: 'motorcycle',
+    19: 'bicycle',
+    30: 'traffic_cone',
+    31: 'barrier'
+}
+
+
+@DATASETS.register_module()
+class SimBEVDataset(Dataset):
+    '''
+    This class serves as the API for experiments on the SimBEV dataset.
+
+    Args:
+        dataset_root: root directory of the dataset.
+        ann_file: annotation file of the dataset.
+        object_classes: list of object classes in the dataset.
+        map_classes: list of BEV map classes in the dataset.
+        pipeline: pipeline used for data processing.
+        modality: modality of the input data.
+        test_mode: whether the dataset is used for training or testing.
+        filter_empty_gt: whether to filter out samples with empty ground
+            truth.
+        with_velocity: whether to include velocity information in the object
+            detection ground truth and predictions.
+        use_valid_flag: whether to filter out invalid objects from each
+            sample.
+        load_interval: interval for loading data samples.
+        max_num_sweeps: maximum number of lidar sweeps to load for each
+            sample.
+        box_type_3d: type of 3D box used in the dataset, indicating the
+            coordinate system of the 3D box. Can be 'LiDAR', 'Depth', or
+            'Camera'.
+        det_eval_mode: evaluation mode for 3D object detection results, can be
+            'iou' or 'distance'.
+    '''
+
+    def __init__(
+        self,
+        dataset_root: str,
+        ann_file: str,
+        object_classes: list = None,
+        map_classes: list = None,
+        pipeline: list = None,
+        modality: dict = None,
+        point_cloud_range: list = None,
+        test_mode: bool = False,
+        filter_empty_gt: bool = True,
+        with_velocity: bool = True,
+        use_valid_flag: bool = False,
+        load_interval: int = 10,
+        max_num_sweeps: int = 9,
+        box_type_3d: str = 'LiDAR',
+        det_eval_mode: str = 'iou'
+    ):
+        super().__init__()
+        self.dataset_root = dataset_root
+        self.ann_file = ann_file
+        self.object_classes = object_classes
+        self.map_classes = map_classes
+        self.modality = modality
+        self.point_cloud_range = point_cloud_range
+        self.test_mode = test_mode
+        self.filter_empty_gt = filter_empty_gt
+        self.with_velocity = with_velocity
+        self.use_valid_flag = use_valid_flag
+        self.load_interval = load_interval
+        self.max_num_sweeps = max_num_sweeps
+
+        self.box_type_3d, self.box_mode_3d = get_box_type(box_type_3d)
+
+        self.eval_mode = det_eval_mode
+        
+        self.epoch = -1
+
+        # Get the list of object classes in the dataset.
+        self.CLASSES = self.get_classes(object_classes)
+
+        self.cat2id = {name: i for i, name in enumerate(self.CLASSES)}
+
+        # Load annotations from the annotation file.
+        self.data_infos = self.load_annotations(self.ann_file)
+
+        # Create the data processing pipeline.
+        if pipeline is not None:
+            self.pipeline = Compose(pipeline)
+
+        if self.modality is None:
+            self.modality = dict(use_camera=True, use_lidar=True)
+
+        if not self.test_mode:
+            self._set_group_flag()
+
+    def set_epoch(self, epoch: int):
+        '''
+        Set the epoch for transforms that require epoch information along the
+        pipeline.
+
+        Args:
+            epoch: epoch to set.
+        '''
+        self.epoch = epoch
+        
+        if hasattr(self, 'pipeline'):
+            for transform in self.pipeline.transforms:
+                if hasattr(transform, 'set_epoch'):
+                    transform.set_epoch(epoch)
+    
+    @classmethod
+    def get_classes(cls, classes=None):
+        '''
+        Get the list of object class names in the dataset.
+
+        Args:
+            cls: list of dataset classes.
+            classes: path to the file containing the list of classes, or the
+                list of classes itself.
+        
+        Returns:
+            class_names: list of object class names in the dataset.
+        '''
+        if classes is None:
+            return cls.CLASSES
+
+        if isinstance(classes, str):
+            class_names = mmcv.list_from_file(classes)
+        elif isinstance(classes, (tuple, list)):
+            class_names = classes
+        else:
+            raise ValueError(f'Unsupported type {type(classes)} of classes.')
+
+        return class_names
+    
+    def get_cat_ids(self, index: int):
+        '''
+        Get category IDs of objects in the sample.
+
+        Args:
+            index: index of the sample in the dataset.
+
+        Returns:
+            cat_ids: list of category IDs of objects in the sample.
+        '''
+        info = self.data_infos[index]
+
+        if self.use_valid_flag:
+            mask = info['valid_flag']
+            
+            gt_names = set(info['gt_names'][mask])
+        else:
+            gt_names = set(info['gt_names'])
+
+        cat_ids = []
+
+        for name in gt_names:
+            if name in self.CLASSES:
+                cat_ids.append(self.cat2id[name])
+        
+        return cat_ids
+    
+    def load_annotations(self, ann_file: str):
+        '''
+        Load annotations from the annotation file.
+
+        Args:
+            ann_file: annotation file of the dataset.
+
+        Returns:
+            data_infos: list of data samples in the dataset.
+        '''
+        annotations = mmcv.load(ann_file)
+
+        data_infos = []
+
+        for key in annotations['data']:
+            data_infos += annotations['data'][key]['scene_data']
+        
+        self.full_infos = data_infos
+        
+        data_infos = data_infos[::self.load_interval]
+
+        self.metadata = annotations['metadata']
+
+        self.transformations = self._calculate_transformations()
+
+        data_infos = self.load_gt_bboxes(data_infos)
+
+        return data_infos
+    
+    def load_gt_bboxes(self, infos: list):
+        '''
+        Load ground truth bounding boxes from file into the list of data
+        samples.
+
+        Args:
+            infos: list of data samples in the dataset.
+        
+        Returns:
+            infos: list of data samples updated with ground truth bounding
+                boxes.
+        '''
+        for info in infos:
+            self._get_box_info(info)
+
+        return infos
+    
+    def _get_box_info(self, info: dict):
+        '''
+        Get 3D object bounding box information for a data sample.
+
+        Args:
+            info: data sample from the dataset.
+        
+        Returns:
+            info: data sample updated with ground truth bounding boxes.
+        '''
+        gt_box_ids = []
+        gt_boxes = []
+        gt_names = []
+        gt_velocities = []
+        
+        num_lidar_pts = []
+        num_radar_pts = []
+
+        distance_to_ego = []
+        angle_to_ego = []
+        
+        difficulty = []
+        valid_flag = []
+
+        # Load ground truth bounding boxes from file.
+        gt_det_path = info['GT_DET']
+
+        mmcv.check_file_exist(gt_det_path)
+
+        gt_det = np.load(gt_det_path, allow_pickle=True)
+
+        # Ego to global transformation.
+        ego2global = np.eye(4).astype(np.float32)
+        
+        ego2global[:3, :3] = Q(info['ego2global_rotation']).rotation_matrix
+        ego2global[:3, 3] = info['ego2global_translation']
+
+        global2lidar = np.linalg.inv(ego2global @ self.transformations['lidar2ego'])
+
+        global2lidarrot = np.eye(4).astype(np.float32)
+        
+        global2lidarrot[:3, :3] = global2lidar[:3, :3]
+
+        # Transform bounding boxes from the global coordinate system to
+        # the lidar coordinate system.
+        for det_object in gt_det:
+            for tag in det_object['semantic_tags']:
+                if tag in OBJECT_CLASSES.keys():
+                    global_bbox_corners = np.append(det_object['bounding_box'], np.ones((8, 1)), 1)
+                    bbox_corners = (global2lidar @ global_bbox_corners.T)[:3].T
+
+                    # Calculate the center of the bounding box.
+                    center = ((bbox_corners[0] + bbox_corners[7]) / 2).tolist()
+
+                    # Calculate the dimensions of the bounding box.
+                    center.append(np.linalg.norm(bbox_corners[0] - bbox_corners[2]))
+                    center.append(np.linalg.norm(bbox_corners[0] - bbox_corners[4]))
+                    center.append(np.linalg.norm(bbox_corners[0] - bbox_corners[1]))
+
+                    # Calculate the yaw angle of the bounding box.
+                    diff = bbox_corners[0] - bbox_corners[2]
+                    
+                    gamma = np.arctan2(diff[1], diff[0])
+
+                    center.append(-gamma)
+
+                    gt_box_ids.append(det_object['id'])
+                    gt_boxes.append(center)
+                    gt_names.append(OBJECT_CLASSES[tag])
+                    gt_velocities.append(
+                        (global2lidarrot @ np.append(det_object['linear_velocity'], [1]))[:2].tolist()
+                    )
+                    
+                    num_lidar_pts.append(det_object['num_lidar_pts'])
+                    num_radar_pts.append(det_object['num_radar_pts'])
+
+                    distance_to_ego.append(det_object['distance_to_ego'])
+                    angle_to_ego.append(det_object['angle_to_ego'])
+
+                    difficulty.append(det_object['difficulty'])
+                    valid_flag.append(det_object['valid_flag'])
+
+        info['gt_box_ids'] = np.array(gt_box_ids)
+        info['gt_boxes'] = np.array(gt_boxes)
+        info['gt_names'] = np.array(gt_names)
+        info['gt_velocity'] = np.array(gt_velocities)
+
+        info['num_lidar_pts'] = np.array(num_lidar_pts)
+        info['num_radar_pts'] = np.array(num_radar_pts)
+        
+        info['distance_to_ego'] = np.array(distance_to_ego)
+        info['angle_to_ego'] = np.array(angle_to_ego)
+        
+        info['difficulty'] = np.array(difficulty)
+        info['valid_flag'] = np.array(valid_flag)
+
+        return info
+    
+    def _calculate_transformations(
+            self,
+            camera_names: list = CAM_NAME,
+            lidar_name: str = 'LIDAR',
+            intrinsics_name: str = 'camera_intrinsics'
+        ):
+        '''
+        Calculate the coordinate transformations between the ego vehicle and
+        the sensors.
+
+        Args:
+            camera_names: list of camera sensor names.
+            lidar_name: name of the lidar sensor.
+            intrinsics_name: name of the camera intrinsics entry.
+
+        Returns:
+            transformations: dictionary of coordinate transformations.
+        '''
+        transformations = {}
+
+        # Lidar to ego transformation.
+        lidar2ego = np.eye(4).astype(np.float32)
+        
+        lidar2ego[:3, :3] = Q(self.metadata[lidar_name]['sensor2ego_rotation']).rotation_matrix
+        lidar2ego[:3, 3] = self.metadata[lidar_name]['sensor2ego_translation']
+
+        transformations['lidar2ego'] = lidar2ego
+
+        transformations['camera_intrinsics'] = []
+        transformations['camera2lidar'] = []
+        transformations['lidar2camera'] = []
+        transformations['lidar2image'] = []
+        transformations['camera2ego'] = []
+
+        for camera in camera_names:
+            # Camera intrinsics.
+            camera_intrinsics = np.eye(4).astype(np.float32)
+
+            camera_intrinsics[:3, :3] = self.metadata[intrinsics_name]
+            
+            transformations['camera_intrinsics'].append(camera_intrinsics)
+            
+            # Lidar to camera transformation.
+            camera2lidar = np.eye(4).astype(np.float32)
+
+            camera2lidar[:3, :3] = Q(self.metadata[camera]['sensor2lidar_rotation']).rotation_matrix
+            camera2lidar[:3, 3] = self.metadata[camera]['sensor2lidar_translation']
+
+            transformations['camera2lidar'].append(camera2lidar)
+
+            lidar2camera = np.linalg.inv(camera2lidar)
+            
+            transformations['lidar2camera'].append(lidar2camera)
+            
+            # Lidar to image transformation.
+            lidar2image = camera_intrinsics @ lidar2camera
+
+            transformations['lidar2image'].append(lidar2image)
+
+            # Camera to ego transformation.
+            camera2ego = np.eye(4).astype(np.float32)
+
+            camera2ego[:3, :3] = Q(self.metadata[camera]['sensor2ego_rotation']).rotation_matrix
+            camera2ego[:3, 3] = self.metadata[camera]['sensor2ego_translation']
+
+            transformations['camera2ego'].append(camera2ego)
+        
+        return transformations
+    
+    def get_data_info(self, index: int):
+        '''
+        Package information from a data sample.
+
+        Args:
+            index: index of the sample in the dataset.
+        
+        Returns:
+            data: packaged information from the sample.
+        '''
+        info = self.data_infos[index]
+
+        data = dict(
+            scene = info['scene'],
+            frame = info['frame'],
+            timestamp = info['timestamp'],
+            gt_seg_path = info['GT_SEG'],
+            gt_det_path = info['GT_DET'],
+            lidar_path = info['LIDAR'],
+            sweeps_lidar_paths = [],
+            sweeps_ego2global = []
+        )
+
+        # Ego to global transformation.
+        ego2global = np.eye(4).astype(np.float32)
+        
+        ego2global[:3, :3] = Q(info['ego2global_rotation']).rotation_matrix
+        ego2global[:3, 3] = info['ego2global_translation']
+        
+        data['ego2global'] = ego2global
+        
+        # Lidar to ego transformation.
+        data['lidar2ego'] = self.transformations['lidar2ego']
+
+        # Load lidar sweeps for the ego vehicle.
+        for i in range(self.max_num_sweeps):
+            if info['frame'] - (i + 1) >= 0:
+                sweep_info = self.full_infos[self.load_interval * index - (i + 1)]
+
+                data['sweeps_lidar_paths'].append(sweep_info['LIDAR'])
+
+                ego2global = np.eye(4).astype(np.float32)
+        
+                ego2global[:3, :3] = Q(sweep_info['ego2global_rotation']).rotation_matrix
+                ego2global[:3, 3] = sweep_info['ego2global_translation']
+
+                data['sweeps_ego2global'].append(ego2global)
+
+        if self.modality['use_camera']:
+            data['image_paths'] = []
+            data['camera_intrinsics'] = self.transformations['camera_intrinsics']
+            data['camera2lidar'] = self.transformations['camera2lidar']
+            data['lidar2camera'] = self.transformations['lidar2camera']
+            data['lidar2image'] = self.transformations['lidar2image']
+            data['camera2ego'] = self.transformations['camera2ego']
+
+            for camera in CAM_NAME:
+                data['image_paths'].append(info['RGB-' + camera])
+
+        data['ann_info'] = self.get_ann_info(index)
+        
+        return data
+    
+    def get_ann_info(self, index: int):
+        '''
+        Get annotation information for a data sample.
+
+        Args:
+            index: index of the sample in the dataset.
+        
+        Returns:
+            anns_results: annotation information from the sample.
+        '''
+        info = self.data_infos[index]
+
+        if self.use_valid_flag:
+            mask = info['valid_flag']
+        else:
+            mask = np.array([True] * len(info['gt_names']))
+        
+        gt_bboxes_3d = info['gt_boxes'][mask]
+        gt_names_3d = info['gt_names'][mask]
+        gt_distance_3d = info['distance_to_ego'][mask]
+        gt_angles_3d = info['angle_to_ego'][mask]
+        gt_difficulty_3d = info['difficulty'][mask]
+
+        gt_difficulty_map = {'easy': 0, 'medium': 1, 'hard': 2}
+
+        gt_difficulty = np.array([gt_difficulty_map[d] for d in gt_difficulty_3d], dtype=np.int64)
+
+        gt_angles_3d[np.isnan(gt_angles_3d)] = 180.0
+
+        gt_labels_3d = []
+
+        for cat in gt_names_3d:
+            if cat in self.CLASSES:
+                gt_labels_3d.append(self.CLASSES.index(cat))
+            else:
+                gt_labels_3d.append(-1)
+        
+        gt_labels_3d = np.array(gt_labels_3d)
+
+        if self.with_velocity:
+            gt_velocity = info['gt_velocity'][mask]
+            
+            gt_velocity[np.isnan(gt_velocity[:, 0])] = [0.0, 0.0]
+            
+            gt_bboxes_3d = np.concatenate([gt_bboxes_3d, gt_velocity], axis=-1)
+
+        gt_bboxes_3d = LiDARInstance3DBoxes(
+            gt_bboxes_3d, box_dim=gt_bboxes_3d.shape[-1], origin=(0.5, 0.5, 0)
+        ).convert_to(self.box_mode_3d)
+
+        anns_results = dict(
+            gt_bboxes_3d=gt_bboxes_3d,
+            gt_labels_3d=gt_labels_3d,
+            gt_names=gt_names_3d,
+            gt_distances=gt_distance_3d,
+            gt_angles=gt_angles_3d,
+            gt_difficulty=gt_difficulty
+        )
+
+        return anns_results
+    
+    def pre_pipeline(self, results):
+        '''
+        Prepare data for the pipeline.
+
+        Args:
+            results: data to be prepared for the pipeline.
+        '''
+        results['img_fields'] = []
+        results['bbox3d_fields'] = []
+        results['pts_mask_fields'] = []
+        results['pts_seg_fields'] = []
+        results['bbox_fields'] = []
+        results['mask_fields'] = []
+        results['seg_fields'] = []
+
+        results['box_type_3d'] = self.box_type_3d
+        results['box_mode_3d'] = self.box_mode_3d
+    
+    def prepare_train_data(self, index):
+        '''
+        Prepare data for training.
+
+        Args:
+            index: index of the sample in the dataset.
+        
+        Returns:
+            example: data prepared for training.
+        '''
+        input_dict = self.get_data_info(index)
+
+        if input_dict is None:
+            return None
+        
+        self.pre_pipeline(input_dict)
+        
+        example = self.pipeline(input_dict)
+
+        if self.filter_empty_gt and (example is None or ~(example['gt_labels_3d']._data != -1).any()):
+            return None
+
+        return example
+    
+    def prepare_test_data(self, index):
+        '''
+        Prepare data for testing.
+
+        Args:
+            index: index of the sample in the dataset.
+        
+        Returns:
+            example: data prepared for testing.
+        '''
+        input_dict = self.get_data_info(index)
+        
+        self.pre_pipeline(input_dict)
+        
+        example = self.pipeline(input_dict)
+
+        return example
+    
+    def evaluate_map(self, results):
+        '''
+        Evaluate BEV map segmentation results.
+
+        Args:
+            results: BEV map segmentation results from the model.
+        
+        Returns:
+            metrics: evaluation metrics for BEV map segmentation results.
+        '''
+        device = torch.device('cuda:0') if torch.cuda.is_available() else torch.device('cpu')
+
+        thresholds = torch.tensor([0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9], device=device)
+
+        for transform in self.pipeline.transforms:
+            if hasattr(transform, 'DxDim'):
+                xDim = transform.DxDim
+            if hasattr(transform, 'xRes'):
+                xRes = transform.xRes
+
+        yDim = xDim
+        yRes = xRes
+
+        # Calculate the center-point coordinates of the BEV grid cells.
+        xLim = xDim * xRes / 2
+        yLim = yDim * yRes / 2
+        
+        cxLim = xLim - xRes / 2
+        cyLim = yLim - yRes / 2
+
+        x = torch.linspace(cxLim, -cxLim, xDim, device=device)
+        y = torch.linspace(cyLim, -cyLim, yDim, device=device)
+
+        xx, yy = torch.meshgrid(x, y, indexing='ij')
+
+        coordinates = torch.stack([xx, yy], dim=2).reshape(-1, 2)
+
+        distance = torch.linalg.norm(coordinates, dim=1)
+
+        masks = torch.zeros(distance.shape[0], 4, dtype=torch.bool, device=device)
+
+        masks[:, 0] = distance >= 0.0
+        masks[:, 1] = distance <= 20.0
+        masks[:, 2] = (distance <= 40.0) & (distance > 20.0)
+        masks[:, 3] = distance > 40.0
+
+        num_classes = len(self.map_classes)
+        num_thresholds = len(thresholds)
+
+        tp = torch.zeros(num_classes, num_thresholds, 4, device=device)
+        fp = torch.zeros(num_classes, num_thresholds, 4, device=device)
+        fn = torch.zeros(num_classes, num_thresholds, 4, device=device)
+
+        confusion_matrix = torch.zeros(num_classes, num_classes, device=device)
+
+        for result in results:
+            pred = result['masks_bev'].to(device)
+            label = result['gt_masks_bev'].to(device)
+
+            pred_labels = (pred >= 0.5)
+            
+            # Update the confusion matrix.
+            for gt_class in range(num_classes):
+                for pred_class in range(num_classes):
+                    confusion_matrix[gt_class, pred_class] += \
+                        ((label[gt_class] == 1) & (pred_labels[pred_class] == 1)).sum()
+
+            pred = pred.detach().reshape(num_classes, -1)
+            label = label.detach().bool().reshape(num_classes, -1)
+
+            pred = pred[:, :, None] >= thresholds
+            label = label[:, :, None]
+
+            for i in range(4):
+                mask_i = masks[:, i]
+                
+                tp[:, :, i] += (pred & label)[:, mask_i, :].sum(dim=1)
+                fp[:, :, i] += (pred & ~label)[:, mask_i, :].sum(dim=1)
+                fn[:, :, i] += (~pred & label)[:, mask_i, :].sum(dim=1)
+
+        ious = tp / (tp + fp + fn + 1e-6)
+        
+        metrics = {}
+        
+        for index, name in enumerate(self.map_classes):
+            metrics[f'map/{name}/IoU@max'] = ious[index, :, 0].max().item()
+            
+            for threshold, iou in zip(thresholds, ious[index, :, 0]):
+                metrics[f'map/{name}/IoU@{threshold.item():.2f}'] = iou.item()
+        
+        metrics['map/mean/IoU@max'] = ious.max(dim=1).values.mean().item()
+
+        for index, threshold in enumerate(thresholds):
+            metrics[f'map/mean/IoU@{threshold.item():.2f}'] = ious[:, index].mean().item()
+        
+        # Print IoU table.
+        table_headings = ['Overall IoUs', '0-20m', '20-40m', '>40m']
+
+        for i in range(4):
+            print(f'\n{"-" * 40} {table_headings[i]} {"-" * 40}')
+            print('\n\n')
+
+            print(f'{"IoU":<12} {0.1:<8}{0.2:<8}{0.3:<8}{0.4:<8}{0.5:<8}{0.6:<8}{0.7:<8}{0.8:<8}{0.9:<8}')
+
+            for index, name in enumerate(self.map_classes):
+                print(f'{name:<12}', ''.join([f'{iou:<8.4f}' for iou in ious[index, :, i].tolist()]))
+
+            print(f'{"mIoU":<12}', ''.join([f'{iou:<8.4f}' for iou in ious[:, :, i].mean(dim=0).tolist()]), '\n')
+        
+        print(f'\n{"-" * 40} {"Confusion Matrix"} {"-" * 40}')
+        print('\n\n')
+
+        print(f'{"":<12}', ''.join([f'{name:<12}' for name in self.map_classes]))
+
+        for index, name in enumerate(self.map_classes):
+            print(f'{name:<12}', ''.join([f'{confusion_matrix[index, j]:<12.0f}' for j in range(num_classes)]))
+        
+        print('\n\n')
+        
+        return metrics
+    
+    def evaluate(self, results, **kwargs):
+        '''
+        Evaluate model results.
+
+        Args:
+            results: list of results from the model.
+        
+        Returns:
+            metrics: evaluation metrics for the results.
+        '''
+        metrics = {}
+
+        # Evaluate BEV map segmentation results.
+        if 'masks_bev' in results[0]:
+            metrics.update(self.evaluate_map(results))
+
+        # Evaluate 3D object detection results.
+        if 'boxes_3d' in results[0]:
+            simbev_eval = SimBEVDetectionEval(results, self.object_classes, self.eval_mode, self.point_cloud_range)
+
+            metrics.update(simbev_eval.evaluate())
+        
+        return metrics
+    
+    def _set_group_flag(self):
+        '''Set the flag for the dataset.'''
+        self.flag = np.zeros(len(self), dtype=np.uint8)
+
+    def _rand_another(self, index):
+        '''
+        Get another random data sample from the same group.
+
+        Args:
+            index: index of the sample in the dataset.
+        
+        Returns:
+            sample: index of another sample from the same group.
+        '''
+        pool = np.where(self.flag == self.flag[index])[0]
+        
+        return np.random.choice(pool)
+    
+    def __getitem__(self, index):
+        if self.test_mode:
+            return self.prepare_test_data(index)
+
+        while True:
+            data = self.prepare_train_data(index)
+
+            if data is None:
+                index = self._rand_another(index)
+                
+                continue
+            
+            return data
+    
+    def __len__(self):
+        return len(self.data_infos)
+
+
+class SimBEVDetectionEval:
+    '''
+    Class for evaluating 3D object detection results on the SimBEV dataset.
+
+    Args:
+        results: results from the model.
+        classes: list of object classes in the dataset.
+        mode: evalution mode, can be 'iou' or 'distance'.
+        point_cloud_range: the range of the point cloud.
+    '''
+    def __init__(self, results, classes, mode='iou', point_cloud_range=None):
+        self.results = results
+        self.classes = classes
+        self.mode = mode
+        self.point_cloud_range = point_cloud_range
+
+        self.max_box_num = {
+            'traffic_light': 40,
+            'traffic_sign': 60,
+            'pedestrian': 100,
+            'car': 100,
+            'truck': 20,
+            'bus': 20,
+            'motorcycle': 20,
+            'bicycle': 20,
+            'traffic_cone': 40,
+            'barrier': 20
+        }
+
+        iou_thresholds = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
+        distance_thresholds = [0.5, 1.0, 2.0, 4.0]
+
+        if self.mode == 'iou':
+            self.thresholds = iou_thresholds
+        elif self.mode == 'distance':
+            self.thresholds = distance_thresholds
+        else:
+            raise ValueError(f'Unsupported evaluation mode {self.mode}.')
+
+    def evaluate(self):
+        '''
+        Evaluate 3D object detection results.
+        '''
+        num_classes = len(self.classes)
+        num_thresholds = len(self.thresholds)
+
+        difficulty_levels = {
+            'all': lambda l: torch.ones(len(l), dtype=torch.bool),
+            'easy': lambda l: l == 0,
+            'medium': lambda l: l == 1,
+            'hard': lambda l: l == 2,
+        }
+
+        # Dictionary to store Average Precision (AP) for each class, IoU
+        # threshold, and difficulty level.
+        ap_metrics = {item: torch.zeros((num_classes, num_thresholds)) for item in difficulty_levels}
+
+        # Dictionary to store Average Translation Error (ATE), Average
+        # Orientation Error (AOE), Average Scale Error (ASE), Average Velocity
+        # Error (AVE) for each class and IoU threshold.
+        det_metrics = {item: torch.zeros((num_classes, num_thresholds)) for item in ['ATE', 'AOE', 'ASE', 'AVE']}
+
+        device = torch.device('cuda:0') if torch.cuda.is_available() else torch.device('cpu')
+
+        print('\n')
+        
+        for k, threshold in enumerate(self.thresholds):
+            print(f'Calculating metrics for threshold {threshold}...')
+
+            # Dictionaries to store True Positive (TP) and False Positive (FP)
+            # values, scores, ATE, AOE, ASE, AVE, and the total number of
+            # ground truth boxes for each class.
+            tps = {(l, i): torch.empty((0, )) for l in difficulty_levels for i in range(num_classes)}
+            fps = {(l, i): torch.empty((0, )) for l in difficulty_levels for i in range(num_classes)}
+
+            scores = {(l, i): torch.empty((0, )) for l in difficulty_levels for i in range(num_classes)}
+
+            num_gt_boxes = {(l, i): 0 for l in difficulty_levels for i in range(num_classes)}
+
+            ate = {i: torch.empty((0, )) for i in range(num_classes)}
+            aoe = {i: torch.empty((0, )) for i in range(num_classes)}
+            ase = {i: torch.empty((0, )) for i in range(num_classes)}
+            ave = {i: torch.empty((0, )) for i in range(num_classes)}
+
+            # Iterate over predictions for each sample.
+            for result in self.results:
+                boxes_3d = result['boxes_3d']
+                scores_3d = result['scores_3d']
+                labels_3d = result['labels_3d']
+                gt_boxes_3d = result['gt_bboxes_3d']
+                gt_labels_3d = result['gt_labels_3d']
+                gt_difficulty_3d = result['gt_difficulty']
+
+                if self.point_cloud_range is not None:
+                    bev_range = np.array(self.point_cloud_range)[[0, 1, 3, 4]] # [x_min, y_min, x_max, y_max]
+                    
+                    in_range = gt_boxes_3d.in_range_bev(bev_range)
+                    
+                    gt_boxes_3d = gt_boxes_3d[in_range]
+                    gt_labels_3d = gt_labels_3d[in_range]
+                    gt_difficulty_3d = gt_difficulty_3d[in_range]
+
+                if self.mode == 'iou':
+                    boxes_3d_vertices = boxes_3d.corners if len(boxes_3d.tensor) > 0 else torch.empty((0, 8, 3))
+                    gt_boxes_3d_vertices = gt_boxes_3d.corners \
+                        if len(gt_boxes_3d.tensor) > 0 else torch.empty((0, 8, 3))
+                elif self.mode == 'distance':
+                    boxes_3d_vertices = boxes_3d.gravity_center
+                    gt_boxes_3d_vertices = gt_boxes_3d.gravity_center
+                else:
+                    raise ValueError(f'Unsupported evaluation mode {self.mode}.')
+
+                for cls in range(num_classes):
+                    pred_mask = labels_3d == cls
+                    
+                    gt_mask = gt_labels_3d == cls
+
+                    pred_boxes = boxes_3d[pred_mask]
+                    pred_scores = scores_3d[pred_mask]
+                    gt_boxes = gt_boxes_3d[gt_mask]
+
+                    gt_difficulty = gt_difficulty_3d[gt_mask]
+
+                    pred_box_vertices = boxes_3d_vertices[pred_mask]
+                    gt_box_vertices = gt_boxes_3d_vertices[gt_mask]
+
+                    # Sort the predictions by confidence score in descending
+                    # order.
+                    sorted_indices = torch.argsort(-pred_scores)
+
+                    pred_boxes = pred_boxes[sorted_indices]
+                    pred_scores = pred_scores[sorted_indices]
+
+                    pred_box_vertices = pred_box_vertices[sorted_indices].to(device)
+
+                    # Cap predictions to the maximum number of boxes per class.
+                    cls_name = self.classes[cls]
+                    max_k = self.max_box_num.get(cls_name, 100)
+
+                    pred_boxes = pred_boxes[:max_k]
+                    pred_scores = pred_scores[:max_k]
+                    
+                    pred_box_vertices = pred_box_vertices[:max_k]
+
+                    gt_box_vertices = gt_box_vertices.to(device)
+                    
+                    if self.mode == 'iou':
+                        # Calculate the Intersection over Union (IoU) between
+                        # the predicted and ground truth bounding boxes.
+                        if len(pred_box_vertices) == 0:
+                            ious = torch.zeros((0, len(gt_box_vertices)), device=device)
+                        elif len(gt_box_vertices) == 0:
+                            ious = torch.zeros((len(pred_box_vertices), 0), device=device)
+                        else:
+                            _, ious = box3d_overlap(pred_box_vertices, gt_box_vertices)
+                    elif self.mode == 'distance':
+                        # Calculate the Euclidean distance between the
+                        # predicted and ground truth bounding box centers.
+                        dists = torch.cdist(pred_box_vertices, gt_box_vertices)
+                    else:
+                        raise ValueError(f'Unsupported evaluation mode {self.mode}.')
+
+                    # Tensor to keep track of ground truth boxes that have
+                    # been assigned to a prediction.
+                    assigned_gt = torch.zeros(len(gt_boxes), dtype=torch.bool, device=device)
+
+                    matched_gt_indices = torch.full((len(pred_boxes), ), -1, dtype=torch.int32, device=device)
+
+                    tp = torch.zeros(len(pred_boxes))
+                    fp = torch.zeros(len(pred_boxes))                  
+
+                    ate_local = []
+                    aoe_local = []
+                    ase_local = []
+                    ave_local = []
+
+                    for i, _ in enumerate(pred_boxes):                        
+                        matched = False
+                        matched_gt_idx = -1
+                        
+                        if self.mode == 'iou':
+                            # Among the ground truth bounding boxes that have not
+                            # been matched to a prediction yet, find the one with
+                            # the highest IoU value.
+                            available_ious = ious[i] * ~assigned_gt
+
+                            if available_ious.shape[0] > 0:
+                                iou_max, max_gt_idx = available_ious.max(dim=0)
+                                max_gt_idx = max_gt_idx.item()
+                            else:
+                                iou_max = 0
+                                max_gt_idx = -1
+
+                            if iou_max >= threshold:
+                                matched = True
+                                matched_gt_idx = max_gt_idx
+                        else:
+                            # Among the ground truth bounding boxes that have not
+                            # been matched to a prediction yet, find the one with
+                            # the smallest Euclidean distance.
+                            available_dists = 10000 - ((10000 - dists[i]) * ~assigned_gt)    
+
+                            if available_dists.shape[0] > 0:
+                                dist_min, min_gt_idx = available_dists.min(dim=0)
+                                min_gt_idx = min_gt_idx.item()
+                            else:
+                                dist_min = 10000
+                                min_gt_idx = -1
+                            
+                            if dist_min <= threshold:
+                                matched = True
+                                matched_gt_idx = min_gt_idx
+                        
+                        if matched:
+                            tp[i] = 1
+
+                            matched_gt_indices[i] = matched_gt_idx
+
+                            assigned_gt[matched_gt_idx] = True
+
+                            # Calculate ATE, which is the Euclidean distance
+                            # between the predicted and ground truth bounding
+                            # box centers.
+                            ate_local.append(
+                                torch.linalg.vector_norm(
+                                    pred_boxes[i].tensor[0, :3] - gt_boxes[matched_gt_idx].tensor[0, :3]
+                                )
+                            )
+
+                            # Calculate AOE, which is the smallest yaw angle
+                            # between the predicted and ground truth bounding
+                            # boxes.
+                            diff_angle = (
+                                gt_boxes[matched_gt_idx].tensor[0, 6] - pred_boxes[i].tensor[0, 6] + np.pi
+                            ) % (2 * np.pi) - np.pi
+
+                            # Ensure the angle difference is between -pi and
+                            # pi.
+                            if diff_angle > np.pi:
+                                diff_angle = diff_angle - 2 * np.pi
+
+                            aoe_local.append(abs(diff_angle))
+
+                            # Calculate ASE, which is defined as 1 - IOU after
+                            # the predicted and ground truth bounding boxes
+                            # are translated and rotated to have the same
+                            # center and orientation.
+                            pred_wlh = pred_boxes[i].tensor[0, 3:6]
+                            gt_wlh = gt_boxes[matched_gt_idx].tensor[0, 3:6]
+
+                            min_wlh = torch.minimum(pred_wlh, gt_wlh)
+
+                            pred_vol = torch.prod(pred_wlh)
+                            gt_vol = torch.prod(gt_wlh)
+                            
+                            intersection = torch.prod(min_wlh)
+
+                            union = pred_vol + gt_vol - intersection
+
+                            ase_local.append(1 - intersection / union)
+
+                            # Calculate AVE, which is the L2 norm of the
+                            # difference between the predicted and ground
+                            # truth bounding box velocities.
+                            ave_local.append(
+                                torch.linalg.vector_norm(
+                                    pred_boxes[i].tensor[0, -2:] - gt_boxes[matched_gt_idx].tensor[0, -2:]
+                                )
+                            )
+                        else:
+                            fp[i] = 1
+                    
+                    for level, level_function in difficulty_levels.items():
+                        mask = level_function(gt_difficulty)
+
+                        num_gt_boxes[(level, cls)] += mask.sum().item()
+
+                        tp_local = torch.zeros(len(pred_boxes))
+                        fp_local = torch.zeros(len(pred_boxes))
+
+                        for i in range(len(pred_boxes)):
+                            if matched_gt_indices[i] != -1 and mask[matched_gt_indices[i]]:
+                                tp_local[i] = tp[i]
+                            else:
+                                fp_local[i] = fp[i]
+                    
+                        tps[(level, cls)] = torch.cat((tps[(level, cls)], tp_local))
+                        fps[(level, cls)] = torch.cat((fps[(level, cls)], fp_local))
+
+                        scores[(level, cls)] = torch.cat((scores[(level, cls)], pred_scores))
+
+                    ate[cls] = torch.cat((ate[cls], torch.Tensor(ate_local)))
+                    aoe[cls] = torch.cat((aoe[cls], torch.Tensor(aoe_local)))
+                    ase[cls] = torch.cat((ase[cls], torch.Tensor(ase_local)))
+                    ave[cls] = torch.cat((ave[cls], torch.Tensor(ave_local)))
+            
+            for level in difficulty_levels:
+                for cls in range(num_classes):
+                    if num_gt_boxes[(level, cls)] == 0:
+                        ap_metrics[level][cls, k] = float('nan')
+
+                        continue
+                    
+                    # Sort TP and FP values by confidence score in descending
+                    # order.
+                    sorted_indices = torch.argsort(-scores[(level, cls)])
+
+                    tps[(level, cls)] = tps[(level, cls)][sorted_indices]
+                    fps[(level, cls)] = fps[(level, cls)][sorted_indices]
+
+                    tps[(level, cls)] = torch.cumsum(tps[(level, cls)], dim=0, dtype=torch.float32)
+                    fps[(level, cls)] = torch.cumsum(fps[(level, cls)], dim=0, dtype=torch.float32)
+
+                    recalls = tps[(level, cls)] / num_gt_boxes[(level, cls)]
+                    precisions = tps[(level, cls)] / (tps[(level, cls)] + fps[(level, cls)])
+
+                    # Add the (0, 1) point to the precision-recall curve.
+                    recalls = torch.cat((torch.Tensor([0.0]), recalls))
+                    precisions = torch.cat((torch.Tensor([1.0]), precisions))
+                    precisions = torch.nan_to_num(precisions, nan=0.0)
+
+                    valid = (precisions >= 0.1)
+                    
+                    recalls_valid = recalls[valid]
+                    precisions_valid = precisions[valid]
+
+                    if len(recalls_valid) == 0:
+                        ap_metrics[level][cls, k] = 0.0
+                        
+                        continue
+
+                    # AP is the area under the precision-recall curve.
+                    ap = torch.trapz(precisions_valid, recalls_valid)
+
+                    ap_metrics[level][cls, k] = ap.clamp(0.0, 1.0) if not torch.isnan(ap) else 0.0
+
+            for cls in range(num_classes):
+                for item, value in zip(['ATE', 'AOE', 'ASE', 'AVE'], [ate, aoe, ase, ave]):
+                    det_metrics[item][cls, k] = value[cls].mean()
+
+        metrics = {}
+
+        mean_metrics = {}
+
+        print('\n')
+
+        for level in difficulty_levels:
+            for index, name in enumerate(self.classes):
+                metrics[f'det/{name}/AP@max/{level}'] = ap_metrics[level][index].max().item()
+                metrics[f'det/{name}/AP@mean/{level}'] = ap_metrics[level][index].nanmean().item()
+
+                for threshold, value in zip(self.thresholds, ap_metrics[level][index]):
+                    metrics[f'det/{name}/AP@{threshold:.2f}/{level}'] = value.item()
+        
+            for index, threshold in enumerate(self.thresholds):
+                metrics[f'det/mean/AP@{threshold:.2f}/{level}'] = ap_metrics[level][:, index].nanmean().item()
+            
+            if self.mode == 'iou':
+                print(f'AP@{level:<13} {0.1:<8}{0.2:<8}{0.3:<8}{0.4:<8}{0.5:<8}{0.6:<8}{0.7:<8}{0.8:<8}{0.9:<8} {"mean":<8}')
+            else:
+                print(f'AP@{level:<13} {0.5:<8}{1.0:<8}{2.0:<8}{4.0:<8} {"mean":<8}')
+
+            for index, name in enumerate(self.classes):
+                print(
+                    f'{name:<16}',
+                    ''.join([f'{value:<8.4f}' for value in ap_metrics[level][index].tolist()]),
+                    f'{ap_metrics[level][index].nanmean().item():<8.4f}'
+                )
+            
+            print(
+                f'mAP@{level:<12}',
+                ''.join([f'{value:<8.4f}' for value in ap_metrics[level].nanmean(dim=0).tolist()]),
+                '\n'
+            )
+
+            if self.mode == 'iou':
+                mean_metrics[f'mAP@{level}'] = ap_metrics[level][:, 2:].nanmean().item()
+            else:
+                mean_metrics[f'mAP@{level}'] = ap_metrics[level].nanmean().item()
+
+            metrics[f'det/mAP@{level}'] = mean_metrics[f'mAP@{level}']
+
+            print(f'mAP@{level}: ', mean_metrics[f'mAP@{level}'], '\n')
+        
+        metrics['det/mAP'] = mean_metrics['mAP@all']
+
+        print(f'mAP: ', mean_metrics['mAP@all'], '\n')
+
+        for item in ['ATE', 'AOE', 'ASE', 'AVE']:
+            for index, name in enumerate(self.classes):
+                metrics[f'det/{name}/{item}@max'] = det_metrics[item][index].max().item()
+                metrics[f'det/{name}/{item}@mean'] = det_metrics[item][index].nanmean().item()
+
+                for threshold, value in zip(self.thresholds, det_metrics[item][index]):
+                    metrics[f'det/{name}/{item}@{threshold:.2f}'] = value.item()
+        
+            for index, threshold in enumerate(self.thresholds):
+                metrics[f'det/mean/{item}@{threshold:.2f}'] = det_metrics[item][:, index].nanmean().item()
+            
+            if self.mode == 'iou':
+                print(f'{item:<16} {0.1:<8}{0.2:<8}{0.3:<8}{0.4:<8}{0.5:<8}{0.6:<8}{0.7:<8}{0.8:<8}{0.9:<8} {"mean":<8}')
+            else:
+                print(f'{item:<16} {0.5:<8}{1.0:<8}{2.0:<8}{4.0:<8} {"mean":<8}')
+
+            for index, name in enumerate(self.classes):
+                print(
+                    f'{name:<16}',
+                    ''.join([f'{value:<8.4f}' for value in det_metrics[item][index].tolist()]),
+                    f'{det_metrics[item][index].nanmean().item():<8.4f}'
+                )
+            
+            print(
+                f'm{item:<15}',
+                ''.join([f'{value:<8.4f}' for value in det_metrics[item].nanmean(dim=0).tolist()]),
+                '\n'
+            )
+
+            if self.mode == 'iou':
+                mean_metrics[f'm{item}'] = det_metrics[item][:, 2:].nanmean().item()
+            else:
+                mean_metrics[f'm{item}'] = det_metrics[item].nanmean().item()
+
+            metrics[f'det/m{item}'] = mean_metrics[f'm{item}']
+
+            print(f'm{item}: ', mean_metrics[f'm{item}'], '\n')
+
+        mATE = max(0.0, 1 - mean_metrics['mATE'])
+        mAOE = max(0.0, 1 - mean_metrics['mAOE'])
+        mASE = max(0.0, 1 - mean_metrics['mASE'])
+        mAVE = max(0.0, 1 - mean_metrics['mAVE'])
+
+        SimBEVDetectionScore = (4 * mean_metrics['mAP@all'] + mATE + mAOE + mASE + mAVE) / 8
+
+        metrics['det/SDS'] = SimBEVDetectionScore
+
+        print('SDS: ', SimBEVDetectionScore, '\n')
+        
+        return metrics

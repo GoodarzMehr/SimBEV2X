@@ -1,0 +1,742 @@
+########## Dataset Settings ##########
+
+mode: 'create' # can be 'create', 'replace', or 'replay'
+
+# When mode is 'create', the following lists denote the number of scenes that
+# should be generated for each set and for each map.
+train_scene_config:
+  Town01: 2
+  Town02: 2
+  Town03: 2
+  Town04: 2
+  Town05: 2
+  Town06: 2
+  Town07: 2
+  Town10HD: 2
+  Town12: 2
+  Town13: 2
+  Town15: 2
+
+val_scene_config:
+  Town01: 1
+  Town02: 1
+  Town03: 1
+  Town04: 1
+  Town05: 1
+  Town06: 1
+  Town07: 1
+  Town10HD: 1
+  Town12: 1
+  Town13: 1
+  Town15: 1
+
+
+test_scene_config:
+  Town01: 1
+  Town02: 1
+  Town03: 1
+  Town04: 1
+  Town05: 1
+  Town06: 1
+  Town07: 1
+  Town10HD: 1
+  Town12: 1
+  Town13: 1
+  Town15: 1
+
+
+# When mode is 'replace', the following list denotes the scenes that should be
+# overwritten.
+replacement_scene_config: []
+
+# When mode is 'replay', the following list denotes the scenes that should be
+# replayed and augmented.
+replay_scene_config: []
+
+########## Simulation Settings ##########
+
+# The following parameters determine the minimum and maximum number of
+# data collection vehicles that can be spawned in each scene.
+min_vehicles: 2
+max_vehicles: 8
+
+# The following parameter determines how the data collection vehicles are
+# spawned in each scene. For both methods, the first spawn point is chosen
+# randomly. For 'clustered', the remaining spawn points are chosen randomly
+# from the spawn points within a certain distance of the first spawn point.
+# For 'chained', each remaining spawn point is chosen from the spawn points
+# within a certain distance of at least one previously chosen spawn point.
+# When the mode is 'both', the method is chosen randomly for each scene.
+vehicle_spawn_mode: 'both' # can be 'clustered', 'chained', or 'both'
+
+# The following parameters determine the distance used for spawning vehicles
+# in the 'clustered' and 'chained' modes, respectively.
+clustered_spawn_distance: 48.0
+chained_spawn_distance: 64.0
+
+# The following parameters determine the minimum and maximum number of
+# road-side units (RSUs) that can be spawned in each scene.
+min_rsus: 0
+max_rsus: 4
+
+# The following lists determine what vehicle(s) to use as data collection
+# vehicles and their color(s). The vehicle(s) can be any vehicle within the
+# CARLA vehicle library, but it is recommended to use a sedan. Other vehicle
+# types may interfere with data collection and require moving the sensors.
+vehicle_list:
+ - 'mustang_2016'
+ - 'supra'
+ - 'chiron'
+ - 'tt'
+vehicle_color_list: # color in 'R,G,B' format, values between 0 and 255
+ - '0,0,0'
+ - '255,0,0'
+ - '0,255,0'
+ - '0,0,255'
+ - '255,255,0'
+ - '255,0,255'
+ - '0,255,255'
+ - '255,255,255'
+
+# The following parameters determine whether to simulate physics for
+# simulation actors (vehicles, pedestrians, static props, etc.) and whether to
+# show debugtelemetry on the spectator view.
+simulate_physics: True
+show_debug_telemetry: False
+
+# Because all simulation actors are spawned in a stationary state at the start
+# of each scene, at first the simulation is run for a certain number of
+# seconds so every actor can get up to speed, and then data is collected and
+# saved throughout the rest of the scene. Data collection duration is randomly
+# selected as an integer between (and including) the minimum and maximum
+# values.
+warmup_duration: 2     # warmup duration, in seconds
+min_scene_duration: 8  # minimum scene duration, in seconds
+max_scene_duration: 32 # maximum scene duration, in seconds
+
+# Basic CARLA settings.
+host: 'localhost'     # IP address of the CARLA server
+timeout: 240.0        # timeout in seconds, it is large to accomodate the
+                      # loading of the large maps (Town12 and Town13)
+timestep: 0.05        # simulation time step, in seconds
+resolution_x: 1920    # spectator view width
+resolution_y: 1080    # spectator view height
+show_display: True    # whether to show the spectator view
+quality_level: 'Epic' # graphics quality level of the simulation, can be
+                      # 'Low', 'Medium', or 'Epic'
+retries_on_error: 10  # number of client retries to connect to the server in
+                      # case of an error
+
+# The following parameter controls which GPU is used for rendering the
+# simulation.
+render_gpu: 0
+
+# The following parameter controls the maximum number of parallel I/O workers
+# (threads) used for saving simulation data to disk.
+max_io_workers: 32
+
+# The following parameters control whether to use the scene number to seed
+# random number generators (both in CARLA and for NumPy and Random libraries),
+# and if so, the offset added to the scene number to get the random seed for
+# that scene (i.e. seed = scene_number + random_seed_offset).
+use_scene_number_for_random_seed: True
+random_seed_offset: 27
+
+# The following parameter controls whether to dynamically adjust certain
+# settings. If set to true, values for 'tile_stream_distance',
+# 'actor_active_distance', 'mapping_area_radius', and 'npc_spawn_radius' set
+# below are ignored and instead calculated and set based on scene duration.
+# This can help improve performance in large maps (Town12 and Town13) and
+# reduce the number of actors that are spawned in each scene, while still
+# ensuring that data collection vehicles have enough surrounding environment
+# to navigate safely.
+dynamic_settings_adjustments: True
+
+# The following parameters are used in large maps (Town12 and Town13) to
+# manage the environment efficiently.
+tile_stream_distance: 1600.0  # configures the maximum distance from the first
+                              # data collection vehicle to stream tiled maps;
+                              # regions of the map within this range are
+                              # visible (and capable of simulating physics),
+                              # while regions outside this range are not
+                              # loaded
+actor_active_distance: 1600.0 # configures the distance from the first data
+                              # collection vehicle where actors become
+                              # dormant; actors within this range will be
+                              # active and actors outside it will become
+                              # dormant
+
+# The following parameters are used to control how waypoints are generated and
+# filtered to create the BEV ground truth efficiently.
+waypoint_distance: 0.4            # distance between waypoints generated from
+                                  # the OpenDRIVE map, in meters; a good rule
+                                  # of thumb is to set this to the same value
+                                  # as 'bev_res'
+mapping_area_radius: 1600.0       # For improved performance, especially in
+                                  # large maps, at the start of each scene
+                                  # only waypoints within this radius of the
+                                  # first data collection vehicle are kept and
+                                  # the rest are discarded; a good rule of
+                                  # thumb is to set this value to
+                                  # 40 * (warmup_duration + max_scene_duration);
+                                  # essentially the farthest distance data
+                                  # collection vehicles in the scene can
+                                  # theoretically travel at 40 m/s
+nearby_mapping_area_radius: 140.0 # Every 10 time steps, those from the
+                                  # remaining waypoints that are within this
+                                  # radius of each data collection vehicle and
+                                  # RSU are chosen to calculate the BEV ground
+                                  # truth; a good rule of thumb is to set this
+                                  # value to around
+                                  # 20 + (bev_dim * bev_res) / sqrt(2)
+
+# The following parameter controls the distance between waypoints generated
+# from the OpenDRIVE map and used as spawn points for data collection
+# vehicles instead of the default spawn points.
+spawn_point_separation_distance: 24.0 # distance, in meters
+
+# The following parameter controls the radius around each data collection
+# vehicle and RSU where object bounding boxes are collected.
+bbox_collection_radius: 200.0 # radius, in meters
+
+# The following parameter controls the radius around the first data collection
+# vehicle where other vehicles and pedestrians are spawned. This should not be
+# larger than the smaller of 'tile_stream_distance' and 'actor_active_distance';
+# otherwise CARLA may segfault. A good rule of thumb is to set this value to
+# around half of 'mapping_area_radius'.
+npc_spawn_radius: 600.0 # radius, in meters
+
+# The following parameter controls the height of the semantic segmentation
+# cameras placed above and below the data collection vehicles and RSUs to
+# capture the BEV ground truth.
+bev_camera_height: 1000.0 # height, in meters
+
+# The following parameter controls whether to render BEV camera images.
+render_bev_camera_images: False
+
+# The following parameters control the size and resolution of the BEV image.
+bev_dim: 400 # height and width of the BEV image in pixels
+bev_res: 0.4 # resolution of the BEV image, in meters per pixel
+
+# The following parameters control the spectator camera.
+spectator_height: 4.0      # height, in meters
+spectator_vehicle_index: 0 # index of the data collection vehicle to follow
+                           # with the spectator camera, 0 being the first
+
+# The following parameter controls whether to combine the BEV image with map
+# data to get the BEV ground truth for sidewalks or whether to use map data
+# alone.
+use_bev_for_sidewalks: False
+
+# The following parameters control the percentage (0 to 100) chance that
+# vehicles ignore traffic lights, signs, other vehicles, and pedestrians at
+# each time step, respectively.
+ignore_lights_percentage: 0.1
+ignore_signs_percentage: 0.1
+ignore_vehicles_percentage: 0.1
+ignore_walkers_percentage: 0.1
+
+# The following parameter controls the percentage (0 to 100) chance that some
+# or all of the doors of a stopped vehicle (e.g. at a traffic light) open. It
+# only applies to supported vehicles (those with articulated doors), and all
+# doors are closed when the vehicle starts moving again.
+door_open_percentage: 10.0
+
+# The following parameter controls the percentage (0 to 100) chance that an
+# emergency vehicle (police, ambulance, fire truck) has its emergency lights
+# turned on.
+emergency_lights_percentage: 50.0
+
+# The following parameters control the percentage (0 to 100) chance that data
+# collection vehicles and other vehicles drive recklessly, completely ignoring
+# traffic lights, signs, other vehicles, and pedestrians.
+reckless_ego_percentage: 1.0
+reckless_npc_percentage: 1.0
+
+# The following parameters control the percentage (0 to 100) chance that data
+# collection vehicles and other vehicles are distracted, completely ignoring
+# traffic lights and signs but not other vehicles and pedestrians.
+distracted_ego_percentage: 2.0
+distracted_npc_percentage: 2.0
+
+# The following parameter controls the maximum number of pedestrians that can
+# be spawned in each scene.
+max_n_walkers: 480
+
+# The following parameter controls the number of attempts to spawn a
+# pedestrian.
+spawn_attempts: 20
+
+# The following parameter controls the minimum speed of a pedestrian.
+walker_speed_min: 0.8 # speed, in meters per second
+
+# The following parameter controls the percentage (0 to 100) of pedestrians
+# that use a wheelchair (if supported by the pedestrian model).
+wheelchair_use_percentage: 4.0
+
+# The following parameter controls whether to dynamically change the weather
+# throughout each scene.
+dynamic_weather: True
+
+# The following parameter controls whether to randomize building light colors.
+# This cannot be done in Town12, Town13, or Town15.
+random_building_light_colors: True
+
+# The following parameters control whether to randomly add to or subtract a
+# constant value from the intensity of all street lights, and the minimum
+# street light intensity allowed.
+change_street_light_intensity: True
+min_street_light_intensity: 10000 # intensity, in lumens
+
+# The following parameters control whether, and the percentage (0 to 100)
+# chance that, a street light is off (broken).
+random_street_light_failure: True
+street_light_failure_percentage: 10.0
+
+# The following parameters control whether to turn off all building and/or
+# street lights.
+turn_off_building_lights: False
+turn_off_street_lights: False
+
+# The following parameters control hazard area generation. Hazard areas are
+# either work zones or traffic accidents that are surrounded by traffic cones.
+hazard_area_percentage: 1.6                    # percentage (0 to 100) of
+                                               # spawn points used to create
+                                               # hazard areas
+accident_hazard_percentage: 50.0               # percentage (0 to 100) of
+                                               # hazard areas that are traffic
+                                               # accidents instead of work
+                                               # zones
+emergency_vehicle_at_accident_percentage: 50.0 # percentage (0 to 100) of
+                                               # traffic accidents that have
+                                               # an emergency vehicle present
+missing_cone_percentage: 32.0                  # percentage (0 to 100) of each
+                                               # hazard area's traffic cones
+                                               # that are missing
+
+# The following parameter controls whether to use SimBEV2X's custom color
+# palette or the Cityscapes palette for visualizing the BEV ground truth.
+use_cityscapes_palette: False
+
+########## Data Collection Vehicle Sensor Settings ##########
+
+# Sensor properties supported by CARLA but not included here can be added
+# to the properties of the respective sensor as well.
+
+camera_width: 1600 # image width, in pixels
+camera_height: 900 # image height, in pixels
+camera_fov: '80'   # camera field of view, in degrees
+
+# The following parameters control whether data collection vehicles use RGB
+# cameras, and if so, the properties of the cameras.
+use_rgb_camera: True
+
+rgb_camera_properties:
+  fstop: '1.8'
+
+# The following parameters control whether data collection vehicles use
+# semantic segmentation cameras, and if so, the properties of the cameras.
+use_semantic_camera: False
+
+semantic_camera_properties:
+  {}
+
+# The following parameters control whether data collection vehicles use
+# instance segmentation cameras, and if so, the properties of the cameras.
+use_instance_camera: True
+
+instance_camera_properties:
+  {}
+
+# The following parameters control whether data collection vehicles use depth
+# cameras, and if so, the properties of the cameras.
+use_depth_camera: False
+
+depth_camera_properties:
+  {}
+
+# The following parameters control whether data collection vehicles use
+# optical flow cameras, and if so, the properties of the cameras.
+use_flow_camera: False
+
+flow_camera_properties:
+  {}
+
+# The following parameters control whether data collection vehicles use lidar,
+# and if so, the number of channels, range, and other properties of the lidar.
+use_lidar: True
+
+lidar_channels: 128 # number of channels (vertical beams)
+lidar_range: 120.0  # range, in meters
+lidar_properties:
+  rotation_frequency: '20.0'   # rotation frequency, in Hz
+  points_per_second: '5242880' # number of points generated per second
+  upper_fov: '10.67'           # upper field of view angle, in degrees
+  lower_fov: '-30.67'          # lower field of view angle, in degrees
+  dropoff_general_rate: '0.14' # proportion of points that are randomly
+                               # dropped
+  noise_stddev: '0.03'         # standard deviation of the noise model used
+                               # for disturbing each point along the vector of
+                               # its ray, in meters
+
+# The following parameters control whether data collection vehicles use
+# semantic lidar, and if so, the number of channels, range, and other
+# properties of the semantic lidar.
+use_semantic_lidar: False
+
+semantic_lidar_channels: 128 # number of channels (vertical beams)
+semantic_lidar_range: 120.0  # range, in meters
+semantic_lidar_properties:
+  rotation_frequency: '20.0'   # rotation frequency, in Hz
+  points_per_second: '5242880' # number of points generated per second
+  upper_fov: '10.67'           # upper field of view angle, in degrees
+  lower_fov: '-30.67'          # lower field of view angle, in degrees
+
+# The following parameters control whether data collection vehicles use
+# radars, and if so, the range, field of view, and other properties of the
+# radars.
+use_radar: True
+
+radar_range: 120.0          # range, in meters
+radar_horizontal_fov: 100.0 # horizontal field of view, in degrees
+radar_vertical_fov: 20.0    # vertical field of view, in degrees
+radar_properties:
+  points_per_second: '40000' # number of points generated per second
+
+# The following parameters control whether data collection vehicles use GNSS,
+# and if so, the properties of the GNSS sensor.
+use_gnss: True
+
+gnss_properties:
+  noise_seed: '27'
+  noise_alt_stddev: '0.04'      # standard deviation of the altitude noise
+                                # model, in meters
+  noise_lat_stddev: '0.0000004' # standard deviation of the latitude noise
+                                # model, in degrees
+  noise_lon_stddev: '0.0000004' # standard deviation of the longitude noise
+                                # model, in degrees
+
+# The following parameters control whether data collection vehicles use IMU,
+# and if so, the properties of the IMU sensor.
+use_imu: True
+
+imu_properties:
+  noise_seed: '27'
+  noise_accel_stddev_x: '0.00017'  # standard deviation of the accelerometer
+                                   # noise model in the x direction, in m/s^2
+  noise_accel_stddev_y: '0.00017'  # standard deviation of the accelerometer
+                                   # noise model in the y direction, in m/s^2
+  noise_accel_stddev_z: '0.00017'  # standard deviation of the accelerometer
+                                   # noise model in the z direction, in m/s^2
+  noise_gyro_bias_x: '0.00017'     # bias of the gyroscope noise model in the
+                                   # x direction, in rad/s
+  noise_gyro_bias_y: '0.00017'     # bias of the gyroscope noise model in the
+                                   # y direction, in rad/s
+  noise_gyro_bias_z: '0.00017'     # bias of the gyroscope noise model in the
+                                   # z direction, in rad/s
+  noise_gyro_stddev_x: '0.0000056' # standard deviation of the gyroscope noise
+                                   # model in the x direction, in rad/s
+  noise_gyro_stddev_y: '0.0000056' # standard deviation of the gyroscope noise
+                                   # model in the y direction, in rad/s
+  noise_gyro_stddev_z: '0.0000056' # standard deviation of the gyroscope noise
+                                   # model in the z direction, in rad/s
+
+# The following parameters control whether data collection vehicles use the
+# voxel detector, and if so, the properties of the voxel detector. The voxel
+# detector provides 3D semantic information in the form of a 3D voxel grid
+# surrounding each data collection vehicle. If 'full_sweep' is set to true,
+# the voxel detector checks each voxel in the grid individually to see if it
+# overlaps with the mesh of an object in the environment. If so, the class of
+# that object is assigned to said voxel. However, this can be computationally
+# expensive. If 'full_sweep' is set to false, the voxel detector instead
+# sweeps voxel-sized boxes in each column/row of the specified axis-aligned
+# directions and records the first hit of that box sweep with each object in
+# its path, in essence capturing the surface voxels of those objects in the
+# specified directions. 'z_fill_mode' can be set to 'BoxSweep', (requires
+# 'use_z_top' to be true), which checks each voxel below the first hit in each
+# column, similar to when 'full_sweep' is true. 'z_fill_mode' can also be set
+# to 'Scanline' (requires both 'use_z_top' and 'use_z_bottom' to be true),
+# which fills in all voxels between the topmost and bottommost hits of each
+# object in each column.
+use_voxel_detector: True
+
+voxel_detector_range: 64.0       # extent of the voxel detection grid in each
+                                 # of the four x and y directions, in meters
+                                 # (the covered area is a square with
+                                 # 2 * 'voxel_detector_range' sides)
+voxel_size: 0.1                  # size of each voxel, in meters
+voxel_detector_upper_limit: 7.0  # upper limit of the voxel detection grid, in
+                                 # meters
+voxel_detector_lower_limit: -1.0 # lower limit of the voxel detection grid, in
+                                 # meters
+voxel_detector_properties:
+  ignore_self: 'False'           # whether to ignore the ego vehicle when
+                                 # creating the voxel grid
+  show_calculation_time: 'False' # Whether to print the time it takes to
+                                 # calculate the voxel grid at each time step
+  use_complex_collision: 'True'  # whether to use complex collisions for more
+                                 # accurate results
+  full_sweep: 'True'             # whether to sweep each voxel in the grid
+                                 # individually
+  z_fill_mode: 'None'            # how to fill in voxels along the z axis; can
+                                 # be 'None', 'BoxSweep', or 'Scanline'
+  use_x_front: 'False'           # whether to sweep along the x axis from
+                                 # front to back
+  use_x_back: 'False'            # whether to sweep along the x axis from back
+                                 # to front
+  use_y_right: 'False'           # whether to sweep along the y axis from
+                                 # right to left
+  use_y_left: 'False'            # whether to sweep along the y axis from left
+                                 # to right
+  use_z_top: 'False'             # whether to sweep along the z axis from top
+                                 # to bottom
+  use_z_bottom: 'False'          # whether to sweep along the z axis from
+                                 # bottom to top
+
+########## RSU Sensor Settings ##########
+
+# Sensor properties supported by CARLA but not included here can be added
+# to the properties of the respective sensor as well.
+
+rsu_camera_width: 1600 # image width in pixels
+rsu_camera_height: 900 # image height in pixels
+rsu_camera_fov: '80'   # camera field of view, in degrees
+
+# The following parameters control whether RSUs use RGB cameras, and if so,
+# the properties of the cameras.
+use_rsu_rgb_camera: True
+
+rsu_rgb_camera_properties:
+  fstop: '1.8'
+
+# The following parameters control whether RSUs use semantic segmentation
+# cameras, and if so, the properties of the cameras.
+use_rsu_semantic_camera: False
+
+rsu_semantic_camera_properties:
+  {}
+
+# The following parameters control whether RSUs use instance segmentation
+# cameras, and if so, the properties of the cameras.
+use_rsu_instance_camera: True
+
+rsu_instance_camera_properties:
+ {}
+
+# The following parameters control whether RSUs use depth cameras, and if so,
+# the properties of the cameras.
+use_rsu_depth_camera: False
+
+rsu_depth_camera_properties:
+ {}
+
+# The following parameters control whether RSUs use optical flow cameras, and
+# if so, the properties of the cameras.
+use_rsu_flow_camera: False
+
+rsu_flow_camera_properties:
+ {}
+
+# The following parameters control whether RSUs use lidar, and if so, the
+# number of channels, range, and other properties of the lidar.
+use_rsu_lidar: True
+
+rsu_lidar_channels: 128 # number of channels (vertical beams)
+rsu_lidar_range: 120.0  # range, in meters
+rsu_lidar_properties:
+  rotation_frequency: '20.0'   # rotation frequency, in Hz
+  points_per_second: '2621440' # number of points generated per second
+  upper_fov: '0.0'             # upper field of view angle, in degrees
+  lower_fov: '-45.0'           # lower field of view angle, in degrees
+  horizontal_fov: '180.0'      # horizontal field of view, in degrees
+  dropoff_general_rate: '0.14' # proportion of points that are randomly
+                               # dropped
+  noise_stddev: '0.03'         # standard deviation of the noise model used
+                               # for disturbing each point along the vector of
+                               # its ray, in meters
+
+# The following parameters control whether RSUs use semantic lidar, and if so,
+# the number of channels, range, and other properties of the semantic lidar.
+use_rsu_semantic_lidar: False
+
+rsu_semantic_lidar_channels: 128 # number of channels (vertical beams)
+rsu_semantic_lidar_range: 120.0  # range, in meters
+rsu_semantic_lidar_properties:
+  rotation_frequency: '20.0'   # rotation frequency, in Hz
+  points_per_second: '2621440' # number of points generated per second
+  upper_fov: '0.0'             # upper field of view angle, in degrees
+  lower_fov: '-45.0'           # lower field of view angle, in degrees
+  horizontal_fov: '180.0'      # horizontal field of view, in degrees
+
+# The following parameters control whether RSUs use radars, and if so, the
+# range, field of view, and other properties of the radars.
+use_rsu_radar: True
+
+rsu_radar_range: 120.0          # range, in meters
+rsu_radar_horizontal_fov: 120.0 # horizontal field of view, in degrees
+rsu_radar_vertical_fov: 20.0    # vertical field of view, in degrees
+rsu_radar_properties:
+  points_per_second: '48000'    # number of points generated per second
+
+# The following parameters control whether data RSUs use the voxel detector,
+# and if so, the properties of the voxel detector. The voxel detector provides
+# 3D semantic information in the form of a 3D voxel grid surrounding each RSU.
+# If 'full_sweep' is set to true, the voxel detector checks each voxel in the
+# grid individually to see if it overlaps with the mesh of an object in the
+# environment. If so, the class of that object is assigned to said voxel.
+# However, this can be computationally expensive. If 'full_sweep' is set to
+# false, the voxel detector instead sweeps voxel-sized boxes in each
+# column/row of the specified axis-aligned directions and records the first
+# hit of that box sweep with each object in its path, in essence capturing the
+# surface voxels of those objects in the specified directions. 'z_fill_mode'
+# can be set to 'BoxSweep', (requires 'use_z_top' to be true), which checks
+# each voxel below the first hit in each column, similar to when 'full_sweep'
+# is true. 'z_fill_mode' can also be set to 'Scanline' (requires both
+# 'use_z_top' and 'use_z_bottom' to be true), which fills in all voxels
+# between the topmost and bottommost hits of each object in each column.
+use_rsu_voxel_detector: True
+
+rsu_voxel_detector_range: 64.0        # extent of the voxel detection grid in
+                                      # each of the four x and y directions,
+                                      # in meters (the covered area is a
+                                      # square with 2 * 'voxel_detector_range'
+                                      # sides)
+rsu_voxel_size: 0.1                   # size of each voxel, in meters
+rsu_voxel_detector_upper_limit: 7.0   # upper limit of the voxel detection
+                                      # grid, in meters
+rsu_voxel_detector_lower_limit: -1.0  # lower limit of the voxel detection
+                                      # grid, inmeters
+rsu_voxel_detector_properties:
+  ignore_self: 'False'           # whether to ignore the ego vehicle when
+                                 # creating the voxel grid
+  show_calculation_time: 'False' # Whether to print the time it takes to
+                                 # calculate the voxel grid at each time step
+  use_complex_collision: 'True'  # whether to use complex collisions for more
+                                 # accurate results
+  full_sweep: 'True'             # whether to sweep each voxel in the grid
+                                 # individually
+  z_fill_mode: 'None'            # how to fill in voxels along the z axis; can
+                                 # be 'None', 'BoxSweep', or 'Scanline'
+  use_x_front: 'False'           # whether to sweep along the x axis from
+                                 # front to back
+  use_x_back: 'False'            # whether to sweep along the x axis from back
+                                 # to front
+  use_y_right: 'False'           # whether to sweep along the y axis from
+                                 # right to left
+  use_y_left: 'False'            # whether to sweep along the y axis from left
+                                 # to right
+  use_z_top: 'False'             # whether to sweep along the z axis from top
+                                 # to bottom
+  use_z_bottom: 'False'          # whether to sweep along the z axis from
+                                 # bottom to top
+
+########## Optional Settings ##########
+
+# The following parameter controls the change in street light intensity. For
+# it to take effect, 'change_street_light_intensity' must be true. If this
+# value is not provided, then the change in street light intensity is chosen
+# randomly for each scene.
+# street_light_intensity_change: 200000.0 # intensity, in lumens
+
+# The following parameters control the number of vehicles and pedestrians that
+# are spawned in each scene. If these values are not provided, they are chosen
+# randomly for each scene.
+# n_vehicles: 100
+# n_walkers: 100
+
+# The following parameter controls the portion of pedestrians that can walk on
+# the road in places other than a crosswalk. If it is not provided, it is
+# chosen randomly for each scene.
+# walker_cross_factor: 0.6
+
+# The following parameters control traffic behavior. If any of these are not
+# provided, they are chosen randomly for each scene.
+# speed_difference: -10.0  # the percentage difference between each vehicle's
+#                          # intended speed and the speed limit; negative
+#                          # values indicate speeds higher than the speed
+#                          # limit
+# distance_to_leading: 4.0 # minimum distance each vehicle has to maintain
+#                          # with the vehicle in front of it, in meters
+# green_time: 12.0         # duration of the green traffic light, in seconds
+
+# The following parameters control the (initial and final, if dynamic weather
+# is enabled) weather. Any subset of these parameters can be provided, and the
+# ones that are not provided are chosen randomly for each scene. Other weather
+# parameters supported by CARLA can be used as well.
+# initial_weather:
+#   cloudiness: 10.0             # cloud cover, values range from 0 (clear
+#                                # sky) to 100
+#   precipitation: 0.0           # rain intensity, values range from 0 (no
+#                                # rain) to 100
+#   precipitation_deposits: 10.0 # amount of water (puddles) on the ground,
+#                                # values range from 0 (dry road) to 100
+                                 # (covered in water)
+#   wind_intensity: 10.0         # intensity of the wind, values range from 0
+#                                # (no wind) to 100
+#   sun_azimuth_angle: 300.0     # azimuth angle of the sun, in degrees;
+#                                # values range from 0 to 360
+#   sun_altitude_angle: 20.0     # altitude angle of the sun, in degrees;
+#                                # values range from -90 to 90
+#   wetness: 0.0                 # intensity of camera wetness, values range
+#                                # from 0 (dry camera) to 100
+#   fog_density: 2.0             # fog concentration or thickness, values
+#                                # range from 0 (no fog) to 100
+#   fog_distance: 0.75           # distance where the fog starts, values
+#                                # greater than 0
+#   fog_falloff: 0.1             # heaviness (specific mass) of the fog,
+#                                # values greater than 0; at 0 the fog is
+#                                # lighter than air, at 1 the fog has about
+#                                # the same heaviness as air, at 5 and above
+#                                # the fog is so heavy that it is compressed
+#                                # to the ground
+#
+# final_weather:
+#   cloudiness: 100.0
+#   precipitation: 100.0
+#   precipitation_deposits: 100.0
+#   wind_intensity: 100.0
+#   sun_azimuth_angle: 0.0
+#   sun_altitude_angle: -20.0
+#   wetness: 100.0
+#   fog_density: 100.0
+#   fog_distance: 1
+#   fog_falloff: 0.1
+
+# The following is a list of spawn point(s) for data collection vehicles for
+# each map. Each spawn point has the format [[x, y, z], [roll, pitch, yaw]]
+# (in CARLA's left-handed coordinate system). When spawn point(s) for a map
+# are listed below, for each scene in that map, one of the listed spawn points
+# is chosen randomly. Otherwise, the spawn points are randomly chosen
+# entirely.
+# data_collection_vehicle_spawn_points:
+#   Town04: [
+#     [[185.2, 204.1, 0.3], [0.0, 0.0, -20.0]],
+#     [[198.3, 195.9, 0.3], [0.0, 0.0, -20.0]],
+#     [[112.8, 38.2, 11.1], [0.0, 0.0, 0.0]]
+#   ]
+#   Town05: [
+#     [[-218.43, -3.92, 0.3], [0.0, 0.0, 180.0]]
+#   ]
+#   Town06: [
+#     [[-5.5314, -0.3351, 0.3], [0.0, 0.0, 90.0]]
+#   ]
+#   Town10HD: [
+#     [[-17.1, 13.2, 0.6], [0.0, 0.0, 180.0]],
+#     [[-64.6, 24.4, 0.6], [0.0, 0.0, 0.0]],
+#     [[-52.3, -28.9, 0.6], [0.0, 0.0, 90.0]],
+#     [[-48.6, 60.6, 0.6], [0.0, 0.0, 90.0]],
+#     [[40.4, 41.9, 0.6], [0.0, 0.0, 90.0]],
+#     [[27.1, 66.3, 0.6], [0.0, 0.0, 180.0]],
+#     [[-54.3, 137.1, 0.6], [0.0, 0.0, 0.0]],
+#     [[106.0, 50.9, 0.6], [0.0, 0.0, -90.0]],
+#     [[57.6, -67.8, 0.6], [0.0, 0.0, 180.0]],
+#     [[-27.8, -61.2, 0.6], [0.0, 0.0, 0.0]],
+#     [[-110.2, -9.8, 0.6], [0.0, 0.0, 90.0]],
+#     [[-87.6, 13.0, 0.6], [0.0, 0.0, 180.0]]
+#   ]
+#   Town12: [
+#       [[780.4, 3510.0, 374.0], [0.0, 0.0, 90.0]]
+#   ]
+#   Town15: [
+#       [[-121.87, 169.54, 151.81], [0.0, 0.28, 3.19]]
+#   ]

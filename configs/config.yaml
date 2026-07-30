@@ -1,0 +1,416 @@
+mode: 'create' # can be 'create', 'replace', or 'replay'
+
+# When mode is 'create' the following lists denote the number of scenes that
+# should be generated for each set and for each map.
+train_scene_config:
+  Town01: 8
+  Town02: 8
+  Town03: 16
+  Town04: 16
+  Town05: 16
+  Town06: 16
+  Town07: 16
+  Town10HD: 16
+  Town12: 32
+  Town15: 24
+
+val_scene_config:
+  Town01: 1
+  Town02: 1
+  Town03: 2
+  Town04: 2
+  Town05: 2
+  Town06: 2
+  Town07: 2
+  Town10HD: 2
+  Town12: 4
+  Town13: 8
+  Town15: 4
+
+test_scene_config:
+  Town01: 2
+  Town02: 2
+  Town03: 4
+  Town04: 4
+  Town05: 4
+  Town06: 4
+  Town07: 4
+  Town10HD: 4
+  Town12: 8
+  Town13: 16
+  Town15: 8
+
+# When mode is 'replace' the following list denotes the scenes that should be
+# overwritten.
+replacement_scene_config: []
+
+# When mode is 'replay' the following list denotes the scenes that should be
+# replayed and augmented.
+replay_scene_config: []
+
+min_vehicles: 2
+max_vehicles: 8
+
+vehicle_spawn_mode: 'both' # can be 'clustered', 'chained', or 'both'
+
+clustered_spawn_distance: 48.0
+chained_spawn_distance: 64.0
+
+min_rsus: 0
+max_rsus: 4
+
+vehicle_list: ['mustang_2016', 'supra', 'chiron', 'tt']
+vehicle_color_list: ['0,0,0', '255,0,0', '0,255,0', '0,0,255', '255,255,0', '255,0,255', '0,255,255', '255,255,255']
+
+simulate_physics: True
+show_debug_telemetry: False
+
+warmup_duration: 2
+min_scene_duration: 8
+max_scene_duration: 32
+
+host: 'localhost'
+timeout: 240.0
+timestep: 0.05
+resolution_x: 1920
+resolution_y: 1080
+show_display: True
+quality_level: 'Epic'
+retries_on_error: 10
+
+render_gpu: 0
+
+max_io_workers: 32
+
+use_scene_number_for_random_seed: True
+random_seed_offset: 27
+
+dynamic_settings_adjustments: True
+
+tile_stream_distance: 1600.0
+actor_active_distance: 1600.0
+
+waypoint_distance: 0.4
+mapping_area_radius: 1600.0
+nearby_mapping_area_radius: 140.0
+
+spawn_point_separation_distance: 24.0
+
+bbox_collection_radius: 200.0
+
+npc_spawn_radius: 600.0
+
+bev_camera_height: 1000.0
+
+render_bev_camera_images: False
+
+bev_dim: 400
+bev_res: 0.4
+
+spectator_height: 4.0
+spectator_vehicle_index: 0
+
+use_bev_for_sidewalks: False
+
+ignore_lights_percentage: 0.1
+ignore_signs_percentage: 0.1
+ignore_vehicles_percentage: 0.1
+ignore_walkers_percentage: 0.1
+
+door_open_percentage: 10.0
+
+emergency_lights_percentage: 50.0
+
+reckless_ego_percentage: 1.0
+reckless_npc_percentage: 1.0
+
+distracted_ego_percentage: 2.0
+distracted_npc_percentage: 2.0
+
+max_n_walkers: 480
+
+spawn_attempts: 20
+
+walker_speed_min: 0.8
+
+wheelchair_use_percentage: 4.0
+
+dynamic_weather: True
+
+random_building_light_colors: True
+
+change_street_light_intensity: True
+min_street_light_intensity: 10000
+
+random_street_light_failure: True
+street_light_failure_percentage: 10.0
+
+turn_off_building_lights: False
+turn_off_street_lights: False
+
+hazard_area_percentage: 1.6
+accident_hazard_percentage: 50.0
+emergency_vehicle_at_accident_percentage: 50.0
+missing_cone_percentage: 32.0
+
+use_cityscapes_palette: False
+
+camera_width: 1600
+camera_height: 900
+camera_fov: '80'
+
+use_rgb_camera: True
+
+rgb_camera_properties:
+  fstop: '1.8'
+
+use_semantic_camera: False
+
+semantic_camera_properties:
+  {}
+
+use_instance_camera: True
+
+instance_camera_properties:
+ {}
+
+use_depth_camera: False
+
+depth_camera_properties:
+ {}
+
+use_flow_camera: False
+
+flow_camera_properties:
+ {}
+
+use_lidar: True
+
+lidar_channels: 128
+lidar_range: 120.0
+lidar_properties:
+  rotation_frequency: '20.0'
+  points_per_second: '5242880'
+  upper_fov: '10.67'
+  lower_fov: '-30.67'
+  dropoff_general_rate: '0.14'
+  noise_stddev: '0.03'
+
+use_semantic_lidar: False
+
+semantic_lidar_channels: 128
+semantic_lidar_range: 120.0
+semantic_lidar_properties:
+  rotation_frequency: '20.0'
+  points_per_second: '5242880'
+  upper_fov: '10.67'
+  lower_fov: '-30.67'
+
+use_radar: True
+
+radar_range: 120.0
+radar_horizontal_fov: 100.0
+radar_vertical_fov: 20.0
+radar_properties:
+  points_per_second: '40000'
+
+use_gnss: True
+
+gnss_properties:
+  noise_seed: '27'
+  noise_alt_stddev: '0.04'
+  noise_lat_stddev: '0.0000004'
+  noise_lon_stddev: '0.0000004'
+
+use_imu: True
+
+imu_properties:
+  noise_seed: '27'
+  noise_accel_stddev_x: '0.00017'
+  noise_accel_stddev_y: '0.00017'
+  noise_accel_stddev_z: '0.00017'
+  noise_gyro_bias_x: '0.00017'
+  noise_gyro_bias_y: '0.00017'
+  noise_gyro_bias_z: '0.00017'
+  noise_gyro_stddev_x: '0.0000056'
+  noise_gyro_stddev_y: '0.0000056'
+  noise_gyro_stddev_z: '0.0000056'
+
+use_voxel_detector: True
+
+voxel_detector_range: 64.0
+voxel_size: 0.1
+voxel_detector_upper_limit: 7.0
+voxel_detector_lower_limit: -1.0
+voxel_detector_properties:
+  ignore_self: 'False'
+  show_calculation_time: 'False'
+  use_complex_collision: 'True'
+  full_sweep: 'True'
+  z_fill_mode: 'None'
+  use_x_front: 'False'
+  use_x_back: 'False'
+  use_y_right: 'False'
+  use_y_left: 'False'
+  use_z_top: 'False'
+  use_z_bottom: 'False'
+
+rsu_camera_width: 1600
+rsu_camera_height: 900
+rsu_camera_fov: '80'
+
+use_rsu_rgb_camera: True
+
+rsu_rgb_camera_properties:
+  fstop: '1.8'
+
+use_rsu_semantic_camera: False
+
+rsu_semantic_camera_properties:
+  {}
+
+use_rsu_instance_camera: True
+
+rsu_instance_camera_properties:
+ {}
+
+use_rsu_depth_camera: False
+
+rsu_depth_camera_properties:
+ {}
+
+use_rsu_flow_camera: False
+
+rsu_flow_camera_properties:
+ {}
+
+use_rsu_lidar: True
+
+rsu_lidar_channels: 128
+rsu_lidar_range: 120.0
+rsu_lidar_properties:
+  rotation_frequency: '20.0'
+  points_per_second: '2621440'
+  upper_fov: '0.0'
+  lower_fov: '-45.0'
+  horizontal_fov: '180.0'
+  dropoff_general_rate: '0.14'
+  noise_stddev: '0.03'
+
+use_rsu_semantic_lidar: False
+
+rsu_semantic_lidar_channels: 128
+rsu_semantic_lidar_range: 120.0
+rsu_semantic_lidar_properties:
+  rotation_frequency: '20.0'
+  points_per_second: '2621440'
+  upper_fov: '0.0'
+  lower_fov: '-45.0'
+  horizontal_fov: '180.0'
+
+use_rsu_radar: True
+
+rsu_radar_range: 120.0
+rsu_radar_horizontal_fov: 120.0
+rsu_radar_vertical_fov: 20.0
+rsu_radar_properties:
+  points_per_second: '48000'
+
+use_rsu_voxel_detector: True
+
+rsu_voxel_detector_range: 64.0
+rsu_voxel_size: 0.1
+rsu_voxel_detector_upper_limit: 7.0
+rsu_voxel_detector_lower_limit: -1.0
+rsu_voxel_detector_properties:
+  ignore_self: 'False'
+  show_calculation_time: 'False'
+  use_complex_collision: 'True'
+  full_sweep: 'True'
+  z_fill_mode: 'None'
+  use_x_front: 'False'
+  use_x_back: 'False'
+  use_y_right: 'False'
+  use_y_left: 'False'
+  use_z_top: 'False'
+  use_z_bottom: 'False'
+
+########## Optional Settings ##########
+
+# street_light_intensity_change: -2000000.0
+
+# n_vehicles: 0
+# n_walkers: 0
+
+# walker_cross_factor: 0.6
+
+# speed_difference: -10.0
+# distance_to_leading: 8.0
+# green_time: 12.0
+
+# initial_weather:
+#   cloudiness: 10.0
+#   precipitation: 0.0
+#   precipitation_deposits: 0.0
+#   wind_intensity: 10.0
+#   sun_azimuth_angle: 300.0
+#   sun_altitude_angle: 20.0
+#   wetness: 0.0
+#   fog_density: 2.0
+#   fog_distance: 0.75
+#   fog_falloff: 0.1
+
+# final_weather:
+#   cloudiness: 10.0
+#   precipitation: 0.0
+#   precipitation_deposits: 0.0
+#   wind_intensity: 10.0
+#   sun_azimuth_angle: 300.0
+#   sun_altitude_angle: -21.0
+#   wetness: 10.0
+#   fog_density: 2.0
+#   fog_distance: 100.0
+#   fog_falloff: 1.0
+
+# data_collection_vehicle_spawn_points:
+#   Town04: [
+#     [[185.2, 204.1, 0.3], [0.0, 0.0, -20.0]],
+#     [[198.3, 195.9, 0.3], [0.0, 0.0, -20.0]],
+#     [[112.8, 38.2, 11.1], [0.0, 0.0, 0.0]]
+#   ]
+#   Town05: [
+#     [[-218.43, -3.92, 0.3], [0.0, 0.0, 180.0]]
+#   ]
+#   Town06: [
+#     [[61.7792, 48.8402, 0.3], [0.0, 0.0, 0.0]],
+#     [[324.2593, 48.7343, 0.3], [0.0, 0.0, 90.0]],
+#     [[-5.5314, -0.3351, 0.3], [0.0, 0.0, 90.0]],
+#     [[-9.0433, 12.9953, 0.3], [0.0, 0.0, 90.0]]
+#   ]
+#   Town10HD: [
+#     [[-17.1, 13.2, 0.6], [0.0, 0.0, 180.0]],
+#     [[-64.6, 24.4, 0.6], [0.0, 0.0, 0.0]],
+#     [[-52.3, -28.9, 0.6], [0.0, 0.0, 90.0]],
+#     [[-48.6, 60.6, 0.6], [0.0, 0.0, 90.0]],
+#     [[40.4, 41.9, 0.6], [0.0, 0.0, 90.0]],
+#     [[27.1, 66.3, 0.6], [0.0, 0.0, 180.0]],
+#     [[-54.3, 137.1, 0.6], [0.0, 0.0, 0.0]],
+#     [[106.0, 50.9, 0.6], [0.0, 0.0, -90.0]],
+#     [[57.6, -67.8, 0.6], [0.0, 0.0, 180.0]],
+#     [[-27.8, -61.2, 0.6], [0.0, 0.0, 0.0]],
+#     [[-110.2, -9.8, 0.6], [0.0, 0.0, 90.0]],
+#     [[-87.6, 13.0, 0.6], [0.0, 0.0, 180.0]]
+#   ]
+#   Town12: [
+#       # [[780.4, 3510.0, 374.0], [0.0, 0.0, 90.0]]
+#       [[-1318.7, 3917.5, 360.0], [0.0, 0.0, 180.0]]
+#   ]
+#   Town13: [
+#       [[2497.6, 4445.6, 171.5], [0.0, 0.0, 126.7]],
+#       [[1253.5, 790.7, 149.2], [0.0, 0.0, 90.0]],
+#       [[2526.3, 6388.1, 166.3], [0.0, 0.0, -131.8]],
+#       [[2314.3, 4143.0, 179.7], [0.0, 0.0, 70.3]]
+#   ]
+#   Town15: [
+#       [[-121.87, 169.54, 151.81], [0.0, 0.28, 3.19]]
+#   ]
