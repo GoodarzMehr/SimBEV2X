@@ -926,7 +926,22 @@ def collect_data_replay_mode(args, core: CarlaCoreV2X, config: dict, metadata: d
             
             except IndexError:
                 logger.warning(
-                    f'Frame count mismatch when augmenting scene {scene_counter:04d}. The augmented data may be '
+                    f'Frame count mismatch for Vehicle {i} when replaying scene {scene_counter:04d}. The new data '
+                    'may be inconsistent with the original data.'
+                )
+
+            try:
+                for j in range(num_rsus):
+                    for i, frame in enumerate(original_data[scene_key]['scene_data'][f'rsu_{j}']):
+                        frame_copy = copy.deepcopy(frame)
+
+                        frame.update(data[scene_key]['scene_data'][f'rsu_{j}'][i])
+
+                        frame.update(frame_copy)
+            
+            except IndexError:
+                logger.warning(
+                    f'Frame count mismatch for RSU {j} when replaying scene {scene_counter:04d}. The new data may be '
                     'inconsistent with the original data.'
                 )
             

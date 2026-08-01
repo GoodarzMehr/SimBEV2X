@@ -62,9 +62,10 @@ class VisualizationContextV2X(VisualizationContext):
         metadata: dict,
         ignore_valid_flag: bool = False,
         filled_voxels: bool = False,
-        trim_step: int = 1
+        black_background: bool = False,
+        trim_step: int = 1,
     ):
-        super().__init__(path, scene_number, frame_number, frame_data, metadata, ignore_valid_flag, filled_voxels)
+        super().__init__(path, scene_number, frame_number, frame_data, metadata, ignore_valid_flag, filled_voxels, black_background)
 
         self.entity_name = entity_name
         self._entity_num = entity_num
@@ -208,7 +209,8 @@ def visualize_lidar_with_bbox(ctx: VisualizationContextV2X):
             difficulty=difficulty,
             xlim=VIEWS[view]['xlim'],
             ylim=VIEWS[view]['ylim'],
-            pixels_per_meter=VIEWS[view]['pixels_per_meter']
+            pixels_per_meter=VIEWS[view]['pixels_per_meter'],
+            black_background=ctx.black_background
         )
     
     # Process both near and far views in parallel.
@@ -238,7 +240,12 @@ def visualize_lidar3d_with_bbox(ctx: VisualizationContextV2X):
             VIEWS[view]['view2lidar_rotation']
         )
 
-        point_cloud_3d, point_distance, _, canvas = project_to_3d_view(point_cloud, lidar2image, camera_intrinsics)
+        point_cloud_3d, point_distance, _, canvas = project_to_3d_view(
+            point_cloud,
+            lidar2image,
+            camera_intrinsics,
+            black_background=ctx.black_background
+        )
 
         color = compute_rainbow_colors(point_distance) * 255.0
 
@@ -278,7 +285,8 @@ def visualize_radar(ctx: VisualizationContext):
             xlim = VIEWS[view]['xlim'],
             ylim = VIEWS[view]['ylim'],
             pixels_per_meter = VIEWS[view]['pixels_per_meter'],
-            radius=2
+            radius=2,
+            black_background=ctx.black_background
         )
     
     # Process both near and far views in parallel.
@@ -314,7 +322,8 @@ def visualize_radar_with_bbox(ctx: VisualizationContextV2X):
             xlim = VIEWS[view]['xlim'],
             ylim = VIEWS[view]['ylim'],
             pixels_per_meter = VIEWS[view]['pixels_per_meter'],
-            radius=2
+            radius=2,
+            black_background=ctx.black_background
         )
     
     # Process both near and far views in parallel.
@@ -342,7 +351,8 @@ def visualize_radar3d(ctx: VisualizationContext):
             point_cloud,
             lidar2image,
             camera_intrinsics,
-            label_color=point_color
+            label_color=point_color,
+            black_background=ctx.black_background
         )
 
         visualize_point_cloud_3d(
@@ -383,7 +393,8 @@ def visualize_radar3d_with_bbox(ctx: VisualizationContextV2X):
             point_cloud,
             lidar2image,
             camera_intrinsics,
-            label_color=point_color
+            label_color=point_color,
+            black_background=ctx.black_background
         )
 
         global2image = lidar2image @ global2lidar
@@ -462,7 +473,8 @@ def visualize_voxel3d(ctx: VisualizationContext):
         with suppress_stderr():
             renderer = o3d.visualization.rendering.OffscreenRenderer(width, height)
 
-        renderer.scene.set_background([1.0, 1.0, 1.0, 1.0])
+        renderer.scene.set_background([1.0, 1.0, 1.0, 1.0]) if ctx.black_background \
+            else renderer.scene.set_background([0.0, 0.0, 0.0, 1.0])
 
         voxel_renderers[renderer_key] = renderer
     else:

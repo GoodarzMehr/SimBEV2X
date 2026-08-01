@@ -144,6 +144,11 @@ argparser.add_argument(
     action='store_true',
     help='use filled voxel grids instead of standard voxel grids'
 )
+argparser.add_argument(
+    '--black-background',
+    action='store_true',
+    help='use black background instead of the default white background'
+)
 
 args = argparser.parse_args()
 
@@ -190,6 +195,7 @@ def main(mode, path: str, max_num: dict):
                 metadata=None,
                 ignore_valid_flag=args.ignore_valid_flag,
                 filled_voxels=args.filled_voxels,
+                black_background=args.black_background,
                 trim_step=args.trim_step
             )
             
@@ -280,7 +286,8 @@ def main(mode, path: str, max_num: dict):
                             entity_num,
                             frame_data,
                             metadata,
-                            args.ignore_valid_flag
+                            args.ignore_valid_flag,
+                            black_background=args.black_background
                         )
 
                         # Call the handler.

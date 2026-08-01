@@ -509,7 +509,10 @@ def fill_voxels_main():
             for scene in infos['data']:
                 for entity in infos['data'][scene]['scene_data']:
                     for info in infos['data'][scene]['scene_data'][entity]:
-                        file_triplets.append((info['VOXEL-GRID'], info['VOXEL-GRID-FILLED'], entity))
+                        try:
+                            file_triplets.append((info['VOXEL-GRID'], info['VOXEL-GRID-FILLED'], entity))
+                        except KeyError as e:
+                            print(f'Key not found while processing {entity} in scene {scene}: {e}')
         
         print(f'Found {len(file_triplets)} voxel grid files to process.')
 
