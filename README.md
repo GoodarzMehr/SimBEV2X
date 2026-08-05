@@ -7,7 +7,7 @@
       <img src="https://img.shields.io/badge/Dataset-blue?logo=google%20drive&logoColor=%23FFFFFF&logoSize=auto" width="129" /></a>
   <a href="https://simbev2x.org" alt="SimBEV2X Project Page">
       <img src="https://img.shields.io/badge/Project%20Page-green?color=%2300CC00&logo=data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAQAAADZc7J/AAAABGdBTUEAALGPC/xhBQAAACBjSFJNAAB6JgAAgIQAAPoAAACA6AAAdTAAAOpgAAA6mAAAF3CculE8AAAAAmJLR0QA/4ePzL8AAAAJcEhZcwAACxMAAAsTAQCanBgAAAAHdElNRQfpBBUSAyKON4S+AAAECUlEQVRIx4WVXUzVdRjHP//D4XhI3BE3yRd0QKArC2Li1gWzsFqt1nq5cV540VYXtNVN3XijW6vFVr5cyEZzaktzaBf4Mm2Ks7ms+dIbpJtiEnAAQ1OgAzQIzqcL/pxEoJ6L//bs/3u+v+f/PP/v9xswLYQsllJGGUXkAX38RgstdDMe8J8hYtxq6201Zdq04446ZtqUrdZbbVz8j/LAShtMmXSPjaY97Pd+6y7TfuNnJk3ZYKWBs5THrbHHbjdbZKW/etaHPOkpF3nIW75okZvttsca485Qnmutwx61XMzzK9utNGqTTWZb5A/+bJFY7lGHrTXXabfXOuwO80R81yHfEGM22WRMfN677jQq5rnDYWvv6ULEGkc9YkLEFbbZ6NwpAFlus89qERMecdSacJwirrHDYW/7sSsM/NA+n5QpAFjqDQ8Zt9RPvO2QHVaKYfsNdvqKdQ7YYb2dfumcaQD4kQN+YbsD1vmynTYYnwCodsDNYrZr3We/es2tbrTKcs95znKr3OhWm9VB97nWbHGLA1YLRqy309LwlhyP+7unTDpoyjuOOOIdUw6a9ISXveyD4clSO603EqWAas5wAwKEPFZylLdZRCHLWcKbwC566KSdbmr4gEJ6A4QbnKGagihlLOYM6XAlheRziRE6gg4hxjPAdkaDCY78RIRHuSBAmjO8RlmEcsa4AsEkQITrmez+SNJPKYTvrzBGeZRiUvSRbQCMsYRRBogaASBGAMSY3Phf9LM0zKWPFMVREuSzlxEmuixmLjsZClsIqAAOZwiYxXLyOR7+f3PIJxGZRor/ofx0Fu62w2KzjRkz4nvetcKoMWPGzPW0p80Ns2zz/cX9mazYDndHaWMeebSFc+4mxnzGwmziMZrZQpz5dDOaWfk82iI0E2UVk5/ZTpoVzKY6BSS4PonLKqI0R2jhJuuYnEU7vawhIDDGApaRQw7LWGDMAKjAzMojrOMmLVG6+JoXKKEVgFtcYi2v8wiPUUCChcBZBujiMhd4ibbwHJSwjhN0RUhzkAQbQHiAp1hMKXWsJ85FDtBFFwe4SJz17OU5slhNjgAbSHCQ9CSdk1ZaZaODdtjnBVeaY5Chc2COhR50xG5TNlplpcl/6YyVdnrVXtvcZJHvZ7TnXj0o8qqNPuwm2+z1qp2hoGQkbcRWK0Qs8brHnDcFIGKt/T4rYoWtjmQk7R5RHXJbKKrvOOxbUwCe9g8/NVvMc7tDU0R1BllPeMykT2RkfbnnvWLJrLJ+n7FssdjHveZ3rvSkp1zofu/4qsVumdVYQojA1TaYsss9HnLc4/7oOesc97yfh9a2ehZry4xz0lz/DM11xL/VlNdmNtdgJhiyWEI5ZRQxnyC092Z6ZrL3fwBmmHFVhXdUNwAAACV0RVh0ZGF0ZTpjcmVhdGUAMjAyNS0wNC0yMVQxODowMTo1NSswMDowMOY/5WAAAAAldEVYdGRhdGU6bW9kaWZ5ADIwMjUtMDQtMjFUMTg6MDE6MzQrMDA6MDD3el/vAAAAAElFTkSuQmCC" width="170" /></a>
-  <a href="" alt="SimBEV2X Video">
+  <a href="https://youtu.be/4Qg5DRScysw" alt="SimBEV2X Video">
       <img src="https://img.shields.io/badge/Video-green?logo=youtube&logoColor=%23FFFFFF&color=%23FF0000" width="106" /></a>
 </p>
 <p align="center">
@@ -16,7 +16,11 @@
 <sup>1</sup>Virginia Commonwealth University, <sup>2</sup>Virginia Tech
 </p>
 
-<!-- https://github.com/user-attachments/assets/af074eff-b30c-43e0-b544-1b38b77d3345 -->
+<div align="center">
+  <a href="https://youtu.be/4Qg5DRScysw">
+    <img src="assets/SimBEV2XThumbnail.png" alt="SimBEV2X" height="450" width="800">
+  </a>
+</div>
 
 <!-- ## News
 **[2025/12/12]** SimBEV2X coming soon...
@@ -53,7 +57,13 @@
 
 SimBEV2X is an advanced vehicle-to-everything synthetic data generation tool built on the CARLA simulator. SimBEV2X is based on [SimBEV](https://github.com/GoodarzMehr/SimBEV) and automatically creates highly randomized driving scenarios to collect rich multi-modal sensor data alongside various types of ground truth, including 3D object bounding boxes with unique track IDs, HD map information, BEV segmentation maps, and 3D semantic occupancy voxel grids from both vehicles and road-side units (RSUs).
 
-We used SimBEV2X to create the SimBEV2X Dataset, the largest V2X perception dataset to date. The dataset comprises 258 scenes, each involving up to 8 connected vehicles and up to 4 RSUs across a variety of road networks. The SimBEV2X Dataset is an order of magnitude larger than existing V2X datasets and contains 102,200 frames, 588,520 lidar point clouds, more than 3 million images, over 27 million object bounding boxes, and a comprehensive set of BEV segmentation maps and 3D semantic occupancy voxel grids.
+We used SimBEV2X to create the SimBEV2X Dataset, the largest V2X perception dataset to date. The dataset comprises 258 scenes, each involving up to 8 connected vehicles and up to 4 RSUs across a variety of road networks. The SimBEV2X Dataset is an order of magnitude larger than existing V2X datasets and contains 102,200 frames, 588,520 lidar point clouds, more than 3 million images, over 27 million object bounding boxes, and a comprehensive set of BEV segmentation maps and 3D semantic occupancy voxel grids. An example scene from the SimBEV2X dataset is shown below.
+
+<div align="center">
+  <a href="https://youtu.be/8lrSr5WIQYo">
+    <img src="assets/Scene100Thumbnail.png" alt="SimBEV2X Dataset Scene 100" height="450" width="800">
+  </a>
+</div>
 
 **Note: the dataset may be subject to small changes.**
 

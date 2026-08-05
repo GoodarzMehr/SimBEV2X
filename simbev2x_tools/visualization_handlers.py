@@ -473,7 +473,7 @@ def visualize_voxel3d(ctx: VisualizationContext):
         with suppress_stderr():
             renderer = o3d.visualization.rendering.OffscreenRenderer(width, height)
 
-        renderer.scene.set_background([1.0, 1.0, 1.0, 1.0]) if ctx.black_background \
+        renderer.scene.set_background([1.0, 1.0, 1.0, 1.0]) if not ctx.black_background \
             else renderer.scene.set_background([0.0, 0.0, 0.0, 1.0])
 
         voxel_renderers[renderer_key] = renderer
