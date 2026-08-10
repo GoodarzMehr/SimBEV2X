@@ -89,7 +89,7 @@ To learn more about how our custom version of CARLA differs from CARLA 0.9.16 se
 
 ### SimBEV2X
 
-We recommend using SimBEV2X with Docker. The base Docker image is Ubuntu 22.04 with CUDA 13.0.2 and Vulkan SDK 1.3.204. If you want to use a different base image, you may have to modify `ubuntu2204/x86_64` when fetching keys on line 61 of the [Dockerfile](Dockerfile), based on your Ubuntu release and system architecture. **Ensure that `libnvidia-gl`, `libnvidia-common`, and `libnvidia-compute` version numbers on line 65 of the [Dockerfile](Dockerfile) match your Nvidia driver version number.**
+We recommend using SimBEV2X with Docker. The base Docker image is Ubuntu 22.04 with CUDA 13.2.1 and Vulkan SDK 1.3.204. If you want to use a different base image, you may have to modify `ubuntu2204/x86_64` when fetching keys on line 61 of the [Dockerfile](Dockerfile), based on your Ubuntu release and system architecture.
 
 1. Install [Docker](https://docs.docker.com/engine/install/) on your system.
 2. Install the [Nvidia Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html#installation-guide). It exposes your Nvidia graphics card to Docker containers.
@@ -97,7 +97,11 @@ We recommend using SimBEV2X with Docker. The base Docker image is Ubuntu 22.04 w
    ```Bash
    git clone https://github.com/GoodarzMehr/SimBEV2X.git && cd SimBEV2X
    ```
-4. Build the SimBEV2X Docker image (this will take several minutes):
+4. Download the SimBEV2X Docker image:
+   ```Bash
+   docker pull goodarzm/simbev2x:cuda-13.2.1-devel-ubuntu-22.04
+   ```
+   Alternatively, build the SimBEV2X Docker image (this will take several minutes):
    ```Bash
    docker build --no-cache --rm --build-arg ARG -t simbev2x:develop .
    ```
@@ -110,12 +114,12 @@ We recommend using SimBEV2X with Docker. The base Docker image is Ubuntu 22.04 w
    -v [path/to/CARLA]:/home/carla \
    -v [path/to/SimBEV2X]:/home/simbev2x \
    -v [path/to/dataset]:/dataset \
-   --shm-size 32g -it simbev2x:develop /bin/bash
+   --shm-size 32g -it simbev2x:[tag] /bin/bash
    ```
    Use `nvidia-smi` to ensure your graphics card(s) is (are) visible inside the container. Use `vulkaninfo --summary` to ensure Vulkan can see your graphics card(s).
 6. Install CARLA inside the container by running:
     ```Bash
-    pip carla/PythonAPI/carla/dist/carla-0.9.16-cp310-cp310-linux_x86_64.whl
+    pip install carla/PythonAPI/carla/dist/carla-0.9.16-cp310-cp310-linux_x86_64.whl
     ```
 7. In a separate terminal window, enter the container as the root user by running `docker exec -it -u 0 [container name] /bin/bash`. Then, run:
     ```Bash
@@ -123,7 +127,11 @@ We recommend using SimBEV2X with Docker. The base Docker image is Ubuntu 22.04 w
     ```
     Exit the container as the root user but stay inside it as the _sb_ (non-root) user.
 
-If you would like to use SimBEV2X without Docker, you can install the dependencies using the [requirements](requirements.txt) file, then install [SimBEV](https://github.com/GoodarzMehr/SimBEV) using `FORCE_CUDA=1 pip install --no-cache-dir git+https://github.com/GoodarzMehr/SimBEV.git@main`, and then follow steps 6 and 7 above.
+If you would like to use SimBEV2X without Docker, you can install the dependencies using the [requirements](requirements.txt) file, then install [SimBEV](https://github.com/GoodarzMehr/SimBEV) using
+```Bash
+FORCE_CUDA=1 pip install --no-cache-dir git+https://github.com/GoodarzMehr/SimBEV.git@main
+```
+and then follow steps 6 and 7 above.
 
 ## Usage
 
