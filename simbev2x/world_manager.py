@@ -553,12 +553,8 @@ class WorldManagerV2X(WorldManager):
 
         bps = []
 
-        mesh_path = '/Game/Carla/Static/Pole/SM_RoadSigns01.SM_RoadSigns01'
-
         for i in range(self._num_rsus):
-            bp = self._world.get_blueprint_library().find('static.prop.mesh')
-
-            bp.set_attribute('mesh_path', mesh_path)
+            bp = self._world.get_blueprint_library().find('static.prop.brokentile01')
 
             bp.set_attribute('role_name', f'rsu_{i}')
 
